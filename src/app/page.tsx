@@ -242,20 +242,6 @@ const formatBytes = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
-const formatSpeed = (bitsPerSecond: number): string => {
-  if (bitsPerSecond === 0) return '0 bps';
-  
-  // Convert bits to more readable format
-  if (bitsPerSecond >= 1000000000) {
-    return (bitsPerSecond / 1000000000).toFixed(1) + ' Gbps';
-  } else if (bitsPerSecond >= 1000000) {
-    return (bitsPerSecond / 1000000).toFixed(1) + ' Mbps';
-  } else if (bitsPerSecond >= 1000) {
-    return (bitsPerSecond / 1000).toFixed(1) + ' Kbps';
-  }
-  return bitsPerSecond + ' bps';
-};
-
 const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('en-NG', {
     style: 'currency',
@@ -546,21 +532,6 @@ const UserDetails: React.FC<UserDetailsProps> = ({
                 </span>
               </div>
               
-              <div className="grid grid-cols-2 gap-3">
-                <div className="text-center p-3 bg-blue-600/10 rounded-lg border border-blue-500/20">
-                  <span className="text-gray-400 text-xs block mb-1">Download Speed</span>
-                  <span className="text-blue-400 font-bold text-base">
-                    {formatSpeed(servicePlan.downrate || 0)}
-                  </span>
-                </div>
-                <div className="text-center p-3 bg-purple-600/10 rounded-lg border border-purple-500/20">
-                  <span className="text-gray-400 text-xs block mb-1">Upload Speed</span>
-                  <span className="text-purple-400 font-bold text-base">
-                    {formatSpeed(servicePlan.uprate || 0)}
-                  </span>
-                </div>
-              </div>
-              
               <div className="text-center py-3 bg-gradient-to-r from-yellow-600/20 to-orange-600/20 rounded-lg border border-yellow-500/30">
                 <span className="text-gray-400 text-xs block mb-1">Monthly Price</span>
                 <span className="text-yellow-400 font-bold text-xl">
@@ -573,20 +544,20 @@ const UserDetails: React.FC<UserDetailsProps> = ({
                 )}
               </div>
               
-              {servicePlan.poolname && (
-                <div className="text-center py-2 bg-gray-600/10 rounded-lg border border-gray-500/20">
-                  <span className="text-gray-400 text-xs block mb-1">IP Pool</span>
-                  <span className="text-gray-300 font-medium text-sm">
-                    {servicePlan.poolname}
-                  </span>
-                </div>
-              )}
-
               {servicePlan.timeunitexp && (
                 <div className="text-center py-2 bg-blue-600/10 rounded-lg border border-blue-500/20">
                   <span className="text-gray-400 text-xs block mb-1">Validity Period</span>
                   <span className="text-blue-300 font-medium text-sm">
                     {servicePlan.timeunitexp} days
+                  </span>
+                </div>
+              )}
+
+              {servicePlan.poolname && (
+                <div className="text-center py-2 bg-gray-600/10 rounded-lg border border-gray-500/20">
+                  <span className="text-gray-400 text-xs block mb-1">IP Pool</span>
+                  <span className="text-gray-300 font-medium text-sm">
+                    {servicePlan.poolname}
                   </span>
                 </div>
               )}
