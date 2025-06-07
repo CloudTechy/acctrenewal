@@ -3,9 +3,16 @@
 import React, { useState, useEffect } from 'react';
 import { motion, Variants } from 'framer-motion';
 import { Wifi, Zap, Shield, Search, Menu, X, ArrowRight, User, Calendar, CreditCard, Globe } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
+
+// Dynamically import Paystack to avoid SSR issues
+const PaystackButton = dynamic(
+  () => import('react-paystack').then(mod => mod.PaystackButton),
+  { ssr: false }
+);
 
 // Types for API responses
 interface UserData {
@@ -52,6 +59,29 @@ interface ServicePlan {
   limitexpiration?: number;
   poolname?: string;
   str?: string;
+}
+
+// Paystack types
+interface PaystackConfig {
+  reference: string;
+  email: string;
+  amount: number;
+  publicKey: string;
+  metadata?: {
+    custom_fields: Array<{
+      display_name: string;
+      variable_name: string;
+      value: string;
+    }>;
+  };
+}
+
+interface PaystackReference {
+  reference: string;
+  status: string;
+  trans: string;
+  transaction: string;
+  trxref: string;
 }
 
 // Secure API Functions - No credentials exposed to frontend
@@ -374,10 +404,70 @@ function AnimatedGroup({
 interface UserDetailsProps {
   userData: UserData;
   servicePlan: ServicePlan;
-  onRenew: () => void;
+  onPaymentSuccess: (reference: PaystackReference) => void;
+  onPaymentClose: () => void;
+  paystackConfig: PaystackConfig | null;
+  isProcessingPayment: boolean;
 }
 
-const UserDetails: React.FC<UserDetailsProps> = ({ userData, servicePlan, onRenew }) => {
+// Client-side payment button component
+const PaymentButton: React.FC<{
+  paystackConfig: PaystackConfig | null;
+  onPaymentSuccess: (reference: PaystackReference) => void;
+  onPaymentClose: () => void;
+  isProcessingPayment: boolean;
+  servicePlan: ServicePlan;
+}> = ({ paystackConfig, onPaymentSuccess, onPaymentClose, isProcessingPayment, servicePlan }) => {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted || !paystackConfig) {
+    return (
+      <Button 
+        disabled={true}
+        className="h-16 px-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <span>Loading Payment...</span>
+      </Button>
+    );
+  }
+
+  const componentProps = {
+    ...paystackConfig,
+    text: `Pay ${formatCurrency(servicePlan.totalPrice || 0)} - Renew Plan`,
+    onSuccess: onPaymentSuccess,
+    onClose: onPaymentClose,
+    className: "h-16 px-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+  };
+
+  if (isProcessingPayment) {
+    return (
+      <Button 
+        disabled={true}
+        className="h-16 px-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <div className="flex items-center gap-3">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+          <span>Processing...</span>
+        </div>
+      </Button>
+    );
+  }
+
+  return <PaystackButton {...componentProps} />;
+};
+
+const UserDetails: React.FC<UserDetailsProps> = ({ 
+  userData, 
+  servicePlan, 
+  onPaymentSuccess, 
+  onPaymentClose,
+  paystackConfig,
+  isProcessingPayment 
+}) => {
   const accountStatus = getAccountStatus(userData);
   
   return (
@@ -491,6 +581,15 @@ const UserDetails: React.FC<UserDetailsProps> = ({ userData, servicePlan, onRene
                   </span>
                 </div>
               )}
+
+              {servicePlan.timeunitexp && (
+                <div className="text-center py-2 bg-blue-600/10 rounded-lg border border-blue-500/20">
+                  <span className="text-gray-400 text-xs block mb-1">Validity Period</span>
+                  <span className="text-blue-300 font-medium text-sm">
+                    {servicePlan.timeunitexp} days
+                  </span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -584,16 +683,16 @@ const UserDetails: React.FC<UserDetailsProps> = ({ userData, servicePlan, onRene
         transition={{ delay: 0.3 }}
         className="text-center"
       >
-        <Button 
-          onClick={onRenew}
-          className="h-16 px-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25 text-lg"
-        >
-          <span>Renew This Plan</span>
-          <ArrowRight className="ml-3 h-6 w-6" />
-        </Button>
+        <PaymentButton
+          paystackConfig={paystackConfig}
+          onPaymentSuccess={onPaymentSuccess}
+          onPaymentClose={onPaymentClose}
+          isProcessingPayment={isProcessingPayment}
+          servicePlan={servicePlan}
+        />
         
         <p className="text-gray-400 text-sm mt-3">
-          Continue enjoying uninterrupted service with {servicePlan.srvname || 'your current plan'}
+          Secure payment powered by Paystack • Renew {servicePlan.srvname || 'your plan'} for {servicePlan.timeunitexp || 30} days
         </p>
       </motion.div>
     </div>
@@ -822,10 +921,44 @@ const ISPLandingPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [renewalSuccess, setRenewalSuccess] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [originalUsername, setOriginalUsername] = useState<string>('');
+
+  // Paystack configuration
+  const generatePaystackConfig = () => {
+    if (!userData || !servicePlan) return null;
+
+    return {
+      reference: `PHS_${Date.now()}_${userData.firstname}_${userData.lastname}`.replace(/\s+/g, '_'),
+      email: userData.email || `${userData.firstname?.toLowerCase()}.${userData.lastname?.toLowerCase()}@phsweb.com`,
+      amount: Math.round((servicePlan.totalPrice || 0) * 100), // Convert to kobo
+      publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || 'pk_test_your_public_key_here',
+      metadata: {
+        custom_fields: [
+          {
+            display_name: 'Service Plan',
+            variable_name: 'service_plan',
+            value: servicePlan.srvname || 'Unknown Plan'
+          },
+          {
+            display_name: 'Username',
+            variable_name: 'username',
+            value: originalUsername
+          },
+          {
+            display_name: 'Validity Period',
+            variable_name: 'validity_days',
+            value: `${servicePlan.timeunitexp || 0} days`
+          }
+        ]
+      }
+    };
+  };
 
   const handleAccountLookup = async (accountName: string) => {
     setIsLoading(true);
     setError(null);
+    setOriginalUsername(accountName);
     
     try {
       // Fetch user data
@@ -852,21 +985,65 @@ const ISPLandingPage: React.FC = () => {
     }
   };
 
-  const handleRenewal = () => {
-    setRenewalSuccess(true);
-    
-    setTimeout(() => {
-      setRenewalSuccess(false);
-      // Reset to initial state
-      setUserData(null);
-      setServicePlan(null);
-    }, 5000);
+  const handlePaymentSuccess = async (reference: PaystackReference) => {
+    console.log('Payment successful:', reference);
+    setIsProcessingPayment(true);
+
+    try {
+      // Call renewal API to process the subscription renewal
+      const renewalResponse = await fetch('/api/renew', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reference: reference.reference,
+          username: originalUsername,
+          srvid: servicePlan?.srvid,
+          timeunitexp: servicePlan?.timeunitexp || 30,
+        }),
+      });
+
+      const renewalResult = await renewalResponse.json();
+
+      if (renewalResult.success) {
+        setRenewalSuccess(true);
+        // Update user data with new expiry
+        if (userData) {
+          setUserData({
+            ...userData,
+            expiry: renewalResult.newExpiry
+          });
+        }
+        
+        setTimeout(() => {
+          setRenewalSuccess(false);
+          // Reset to initial state after showing success
+          setUserData(null);
+          setServicePlan(null);
+          setOriginalUsername('');
+        }, 5000);
+      } else {
+        setError(renewalResult.error || 'Failed to process renewal');
+      }
+    } catch (err) {
+      console.error('Renewal processing error:', err);
+      setError('Failed to process renewal. Please contact support.');
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
+  const handlePaymentClose = () => {
+    console.log('Payment dialog closed');
+    setIsProcessingPayment(false);
   };
 
   const resetForm = () => {
     setUserData(null);
     setServicePlan(null);
     setError(null);
+    setOriginalUsername('');
   };
 
   const features = [
@@ -950,16 +1127,19 @@ const ISPLandingPage: React.FC = () => {
                         <h2 className="text-2xl font-bold text-white">Account Information</h2>
                         <Button 
                           onClick={resetForm}
-                          variant="outline"
-                          className="border-gray-600 text-gray-300 hover:bg-gray-800"
+                          className="bg-gray-700/80 hover:bg-gray-600/80 text-gray-100 hover:text-white border border-gray-500/50 hover:border-gray-400 px-6 py-2 rounded-lg font-semibold text-sm shadow-lg backdrop-blur-sm transition-all duration-200 transform hover:scale-105 hover:shadow-xl"
                         >
+                          <Search className="mr-2 h-4 w-4" />
                           Search Another Account
                         </Button>
                       </div>
                       <UserDetails 
                         userData={userData} 
                         servicePlan={servicePlan} 
-                        onRenew={handleRenewal}
+                        onPaymentSuccess={handlePaymentSuccess}
+                        onPaymentClose={handlePaymentClose}
+                        paystackConfig={generatePaystackConfig()}
+                        isProcessingPayment={isProcessingPayment}
                       />
                     </div>
                   ) : (
