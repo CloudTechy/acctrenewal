@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Server-side API configuration (same as user API for consistency)
+const RADIUS_API_CONFIG = {
+  baseUrl: process.env.RADIUS_API_URL || 'http://161.35.46.125/radiusmanager/api/sysapi.php',
+  apiuser: process.env.RADIUS_API_USER || 'api',
+  apipass: process.env.RADIUS_API_PASS || 'api123'
+};
+
 interface RenewalRequest {
   reference: string;
   username: string;
@@ -51,23 +58,18 @@ const addCreditsToUser = async (
   trafficToAdd: number = 0
 ): Promise<AddCreditsResponse> => {
   try {
-    const formData = new FormData();
-    formData.append('apiuser', process.env.RADIUS_API_USER || '');
-    formData.append('apipass', process.env.RADIUS_API_PASS || '');
-    formData.append('q', 'add_credits');
-    formData.append('username', username);
-    formData.append('dlbytes', '0');  // No separate download traffic - using combined
-    formData.append('ulbytes', '0');  // No separate upload traffic - using combined
-    formData.append('totalbytes', trafficToAdd.toString()); // Combined traffic to add
-    formData.append('expiry', daysToAdd.toString()); // Number of days to add
-    formData.append('unit', 'DAY');   // Unit is days
-    formData.append('onlinetime', '0'); // No online time to add
+    // Build URL with query parameters (same as other RADIUS API calls)
+    const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=add_credits&username=${encodeURIComponent(username)}&dlbytes=0&ulbytes=0&totalbytes=${trafficToAdd}&expiry=${daysToAdd}&unit=DAY&onlinetime=0`;
 
     console.log('Adding credits to user:', username, 'with', daysToAdd, 'days and', trafficToAdd, 'bytes of traffic');
+    console.log('Using RADIUS API endpoint:', RADIUS_API_CONFIG.baseUrl);
+    console.log('Making RADIUS API call to:', url.replace(RADIUS_API_CONFIG.apipass, '***'));
 
-    const response = await fetch('https://portal1.phsweb.ng/api/sysapi.php', {
-      method: 'POST',
-      body: formData,
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'PHSWEB-NextJS-App/1.0',
+      },
     });
 
     if (!response.ok) {
