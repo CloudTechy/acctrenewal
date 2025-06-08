@@ -24,11 +24,36 @@ export async function POST(request: NextRequest) {
     console.log('Making RADIUS API call to:', url.replace(RADIUS_API_CONFIG.apipass, '***'));
     console.log('Using credentials:', { apiuser: RADIUS_API_CONFIG.apiuser, apipass: '***' });
     
-    const response = await fetch(url);
+    // Add fetch options for better error handling
+    const fetchOptions: RequestInit = {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'PHSWEB-NextJS-App/1.0',
+      },
+      // For development only - in production, ensure proper SSL certificates
+      ...(process.env.NODE_ENV === 'development' && {
+        // Note: Only for development - remove in production
+      })
+    };
+    
+    const response = await fetch(url, fetchOptions);
     
     if (!response.ok) {
       console.error(`RADIUS API HTTP error! status: ${response.status}`);
-      throw new Error(`HTTP error! status: ${response.status}`);
+      console.error('Response headers:', response.headers);
+      
+      // Try to get error details
+      const errorText = await response.text();
+      console.error('Error response body:', errorText);
+      
+      return NextResponse.json(
+        { 
+          error: `RADIUS API error: ${response.status}`,
+          details: errorText,
+          statusText: response.statusText 
+        },
+        { status: 500 }
+      );
     }
     
     const responseText = await response.text();
@@ -42,8 +67,12 @@ export async function POST(request: NextRequest) {
       console.log('Is array:', Array.isArray(data));
     } catch (parseError) {
       console.error('Failed to parse RADIUS API response as JSON:', parseError);
+      console.error('Raw response was:', responseText);
       return NextResponse.json(
-        { error: 'Invalid JSON response from RADIUS API' },
+        { 
+          error: 'Invalid JSON response from RADIUS API',
+          rawResponse: responseText 
+        },
         { status: 500 }
       );
     }
@@ -53,8 +82,18 @@ export async function POST(request: NextRequest) {
     
   } catch (error) {
     console.error('Error fetching user data:', error);
+    
+    // Enhanced error reporting
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorCause = error instanceof Error && 'cause' in error ? error.cause : null;
+    
     return NextResponse.json(
-      { error: 'Failed to fetch user data', details: error instanceof Error ? error.message : 'Unknown error' },
+      { 
+        error: 'Failed to fetch user data', 
+        details: errorMessage,
+        cause: errorCause,
+        timestamp: new Date().toISOString()
+      },
       { status: 500 }
     );
   }
