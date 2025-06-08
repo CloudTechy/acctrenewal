@@ -239,8 +239,27 @@ const formatBytes = (bytes: number): string => {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  const i = Math.floor(Math.log(Math.abs(bytes)) / Math.log(k));
+  return parseFloat((Math.abs(bytes) / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+// New function to handle usage data (negative = used, positive = remaining)
+const formatUsageData = (bytes: number): { used: string; remaining: string; isNegative: boolean } => {
+  if (bytes === 0) {
+    return { used: '0 Bytes', remaining: '0 Bytes', isNegative: false };
+  }
+  
+  const isNegative = bytes < 0;
+  const absBytes = Math.abs(bytes);
+  const formatted = formatBytes(absBytes);
+  
+  if (isNegative) {
+    // Negative value = data used
+    return { used: formatted, remaining: '0 Bytes', isNegative: true };
+  } else {
+    // Positive value = data remaining
+    return { used: '0 Bytes', remaining: formatted, isNegative: false };
+  }
 };
 
 const formatCurrency = (amount: number): string => {
@@ -658,34 +677,64 @@ const UserDetails: React.FC<UserDetailsProps> = ({
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-3 text-sm">
-              <div className="text-center p-3 bg-blue-600/10 rounded-lg border border-blue-500/20">
-                <span className="text-gray-400 text-xs block mb-1">Download Remaining</span>
-                <span className="text-blue-400 font-bold text-base">
-                  {formatBytes(userData.dlbytes || 0)}
-                </span>
-              </div>
+            <div className="space-y-3">
+              {/* Download Usage - Only show if used > 0 */}
+              {formatUsageData(userData.dlbytes || 0).isNegative && (
+                <div className="flex justify-between items-center p-3 bg-blue-600/10 rounded-lg border border-blue-500/20">
+                  <span className="text-gray-400 font-medium">Download Used</span>
+                  <span className="text-red-400 font-bold text-lg">
+                    {formatUsageData(userData.dlbytes || 0).used}
+                  </span>
+                </div>
+              )}
               
-              <div className="text-center p-3 bg-purple-600/10 rounded-lg border border-purple-500/20">
-                <span className="text-gray-400 text-xs block mb-1">Upload Remaining</span>
-                <span className="text-purple-400 font-bold text-base">
-                  {formatBytes(userData.ulbytes || 0)}
-                </span>
-              </div>
+              {/* Upload Usage - Only show if used > 0 */}
+              {formatUsageData(userData.ulbytes || 0).isNegative && (
+                <div className="flex justify-between items-center p-3 bg-purple-600/10 rounded-lg border border-purple-500/20">
+                  <span className="text-gray-400 font-medium">Upload Used</span>
+                  <span className="text-red-400 font-bold text-lg">
+                    {formatUsageData(userData.ulbytes || 0).used}
+                  </span>
+                </div>
+              )}
               
-              <div className="text-center p-3 bg-green-600/10 rounded-lg border border-green-500/20">
-                <span className="text-gray-400 text-xs block mb-1">Total Remaining</span>
-                <span className="text-green-400 font-bold text-base">
-                  {formatBytes(userData.totalbytes || 0)}
-                </span>
-              </div>
+              {/* Total Used - Show if either download or upload has been used */}
+              {(formatUsageData(userData.dlbytes || 0).isNegative || formatUsageData(userData.ulbytes || 0).isNegative) && (
+                <div className="flex justify-between items-center p-3 bg-yellow-600/10 rounded-lg border border-yellow-500/20">
+                  <span className="text-gray-400 font-medium">Total Used</span>
+                  <span className="text-yellow-400 font-bold text-lg">
+                    {formatBytes(Math.abs(userData.dlbytes || 0) + Math.abs(userData.ulbytes || 0))}
+                  </span>
+                </div>
+              )}
               
+              {/* Total Remaining - Only show if remaining > 0 */}
+              {!formatUsageData(userData.totalbytes || 0).isNegative && userData.totalbytes && userData.totalbytes > 0 && (
+                <div className="flex justify-between items-center p-3 bg-green-600/10 rounded-lg border border-green-500/20">
+                  <span className="text-gray-400 font-medium">Total Remaining</span>
+                  <span className="text-green-400 font-bold text-lg">
+                    {formatUsageData(userData.totalbytes || 0).remaining}
+                  </span>
+                </div>
+              )}
+              
+              {/* Online Time - Only show if > 0 */}
               {userData.onlinetime && userData.onlinetime > 0 && (
-                <div className="text-center p-3 bg-orange-600/10 rounded-lg border border-orange-500/20">
-                  <span className="text-gray-400 text-xs block mb-1">Online Time Remaining</span>
-                  <span className="text-orange-400 font-bold text-base">
+                <div className="flex justify-between items-center p-3 bg-orange-600/10 rounded-lg border border-orange-500/20">
+                  <span className="text-gray-400 font-medium">Online Time Remaining</span>
+                  <span className="text-orange-400 font-bold text-lg">
                     {Math.floor(userData.onlinetime / 3600)}h {Math.floor((userData.onlinetime % 3600) / 60)}m
                   </span>
+                </div>
+              )}
+              
+              {/* Show message if no usage data is available */}
+              {!formatUsageData(userData.dlbytes || 0).isNegative && 
+               !formatUsageData(userData.ulbytes || 0).isNegative && 
+               (!userData.totalbytes || userData.totalbytes <= 0) && 
+               (!userData.onlinetime || userData.onlinetime <= 0) && (
+                <div className="text-center p-6 bg-gray-600/10 rounded-lg border border-gray-500/20">
+                  <span className="text-gray-400 text-sm">No usage data available</span>
                 </div>
               )}
             </div>
