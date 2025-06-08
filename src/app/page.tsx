@@ -728,9 +728,13 @@ const Navbar: React.FC = () => {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center">
-              <a href="#" className="flex items-center space-x-2">
-                <span className="text-blue-400 font-bold text-2xl">PHSWEB Internet</span>
-              </a>
+              <Link href="/" className="flex items-center space-x-2">
+                <img 
+                  src="/phsweblogo.png" 
+                  alt="PHSWEB Internet" 
+                  className="h-16 w-auto"
+                />
+              </Link>
             </div>
 
             <div className="hidden md:block">
@@ -1119,7 +1123,7 @@ const ISPLandingPage: React.FC = () => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center justify-between md:flex-row max-w-6xl mx-auto">
             <div className="mb-8 md:mb-0 text-center md:text-left">
-              <span className="text-blue-400 font-bold text-2xl">PHSWEB Internet</span>
+              <span className="text-blue-400 font-bold text-xl">PHSWEB Internet</span>
               <p className="mt-3 text-gray-400 text-justify max-w-xs">
                 Providing reliable internet services since 2010
               </p>

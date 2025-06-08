@@ -14,7 +14,11 @@ const TermsPage: React.FC = () => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <Link href="/" className="flex items-center space-x-2">
-              <span className="text-blue-400 font-bold text-2xl">PHSWEB Internet</span>
+              <img 
+                src="/phsweblogo.png" 
+                alt="PHSWEB Internet" 
+                className="h-16 w-auto"
+              />
             </Link>
             <Link href="/">
               <Button variant="outline" className="flex items-center gap-2">
