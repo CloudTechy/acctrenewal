@@ -1026,6 +1026,7 @@ const ISPLandingPage: React.FC = () => {
           username: originalUsername,
           srvid: servicePlan?.srvid,
           timeunitexp: servicePlan?.timeunitexp || 30,
+          trafficunitcomb: servicePlan?.trafficunitcomb || 0,
         }),
       });
 

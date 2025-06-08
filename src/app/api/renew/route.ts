@@ -5,6 +5,7 @@ interface RenewalRequest {
   username: string;
   srvid: number;
   timeunitexp: number;
+  trafficunitcomb?: number; // Add traffic unit for combined traffic plans
 }
 
 interface AddCreditsResponse {
@@ -43,24 +44,28 @@ const verifyPaystackTransaction = async (reference: string): Promise<boolean> =>
   }
 };
 
-// Add credits to user via RADIUS Manager (automatically handles expiry extension)
-const addCreditsToUser = async (username: string, daysToAdd: number): Promise<AddCreditsResponse> => {
+// Add credits to user via RADIUS Manager (handles both time and traffic credits)
+const addCreditsToUser = async (
+  username: string, 
+  daysToAdd: number, 
+  trafficToAdd: number = 0
+): Promise<AddCreditsResponse> => {
   try {
     const formData = new FormData();
     formData.append('apiuser', process.env.RADIUS_API_USER || '');
     formData.append('apipass', process.env.RADIUS_API_PASS || '');
     formData.append('q', 'add_credits');
     formData.append('username', username);
-    formData.append('dlbytes', '0');  // No download traffic to add
-    formData.append('ulbytes', '0');  // No upload traffic to add  
-    formData.append('totalbytes', '0'); // No total traffic to add
+    formData.append('dlbytes', '0');  // No separate download traffic - using combined
+    formData.append('ulbytes', '0');  // No separate upload traffic - using combined
+    formData.append('totalbytes', trafficToAdd.toString()); // Combined traffic to add
     formData.append('expiry', daysToAdd.toString()); // Number of days to add
     formData.append('unit', 'DAY');   // Unit is days
     formData.append('onlinetime', '0'); // No online time to add
 
-    console.log('Adding credits to user:', username, 'with', daysToAdd, 'days');
+    console.log('Adding credits to user:', username, 'with', daysToAdd, 'days and', trafficToAdd, 'bytes of traffic');
 
-    const response = await fetch('http://161.35.46.125/radiusmanager/api/sysapi.php', {
+    const response = await fetch('https://portal1.phsweb.ng/api/sysapi.php', {
       method: 'POST',
       body: formData,
     });
@@ -107,9 +112,9 @@ const addCreditsToUser = async (username: string, daysToAdd: number): Promise<Ad
 export async function POST(request: NextRequest) {
   try {
     const body: RenewalRequest = await request.json();
-    const { reference, username, srvid, timeunitexp } = body;
+    const { reference, username, srvid, timeunitexp, trafficunitcomb } = body;
 
-    console.log('Processing renewal:', { reference, username, srvid, timeunitexp });
+    console.log('Processing renewal:', { reference, username, srvid, timeunitexp, trafficunitcomb });
 
     // Validate required fields
     if (!reference || !username || !srvid || !timeunitexp) {
@@ -128,8 +133,12 @@ export async function POST(request: NextRequest) {
 
     console.log('Payment verified successfully');
 
-    // Step 2: Add credits (days) to user account - RADIUS Manager handles the expiry logic
-    const addCreditsResult = await addCreditsToUser(username, timeunitexp);
+    // Step 2: Add credits to user account
+    // - For unlimited plans: only add time (days)
+    // - For traffic-based plans: add both time and traffic
+    const trafficToAdd = trafficunitcomb || 0; // Use traffic unit from service plan, default to 0 for unlimited
+    
+    const addCreditsResult = await addCreditsToUser(username, timeunitexp, trafficToAdd);
     if (!addCreditsResult.success) {
       return NextResponse.json({ 
         error: 'Failed to add credits to account' 
@@ -143,7 +152,11 @@ export async function POST(request: NextRequest) {
       message: 'Account renewed successfully',
       newExpiry: addCreditsResult.newExpiry,
       remainingData: addCreditsResult.data,
-      reference: reference
+      reference: reference,
+      creditsAdded: {
+        days: timeunitexp,
+        traffic: trafficToAdd
+      }
     });
 
   } catch (error) {
