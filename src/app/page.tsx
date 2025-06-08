@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, Variants } from 'framer-motion';
-import { Wifi, Zap, Shield, Search, Menu, X, ArrowRight, User, Calendar, CreditCard, Globe } from 'lucide-react';
+import { Search, Menu, X, User, Calendar, CreditCard, Globe } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -670,31 +670,6 @@ const UserDetails: React.FC<UserDetailsProps> = ({
   );
 };
 
-// Feature Card Component
-interface FeatureCardProps {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-}
-
-const FeatureCard: React.FC<FeatureCardProps> = ({ icon: Icon, title, description }) => {
-  return (
-    <Card className="border-gray-700/50 bg-gray-900/70 backdrop-blur-sm shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 hover:scale-105 h-full flex flex-col">
-      <CardHeader className="flex-shrink-0">
-        <div className="flex items-center gap-3 justify-center text-center">
-          <div className="rounded-full bg-blue-500/20 p-3 text-blue-400">
-            <Icon className="h-6 w-6" />
-          </div>
-        </div>
-        <h3 className="text-xl font-semibold text-center text-gray-100">{title}</h3>
-      </CardHeader>
-      <CardContent className="flex-grow flex items-center">
-        <p className="text-gray-300 text-justify leading-relaxed">{description}</p>
-      </CardContent>
-    </Card>
-  );
-};
-
 // Navbar Component
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -1017,24 +992,6 @@ const ISPLandingPage: React.FC = () => {
     setOriginalUsername('');
   };
 
-  const features = [
-    {
-      icon: Wifi,
-      title: "High-Speed Internet",
-      description: "Enjoy blazing fast internet speeds with our fiber optic network, perfect for streaming, gaming, and working from home."
-    },
-    {
-      icon: Shield,
-      title: "Enhanced Security",
-      description: "Our network includes advanced security features to keep your data safe and protect your devices from online threats."
-    },
-    {
-      icon: Zap,
-      title: "Reliable Connection",
-      description: "Experience 99.9% uptime with our robust infrastructure designed to keep you connected when you need it most."
-    }
-  ];
-
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-black">
       <style jsx global>{`
@@ -1125,58 +1082,6 @@ const ISPLandingPage: React.FC = () => {
                   )}
                 </div>
               </AnimatedGroup>
-            </div>
-          </div>
-        </section>
-        
-        {/* Features Section */}
-        <section id="features" className="py-20 md:py-32 bg-gray-900/50 backdrop-blur-sm">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-20 max-w-4xl mx-auto">
-              <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-white mb-6">
-                Why Renew With Us?
-              </h2>
-              <p className="text-xl sm:text-2xl text-gray-300 leading-relaxed text-center">
-                Enjoy these premium benefits when you renew your subscription
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-3 max-w-6xl mx-auto items-stretch">
-              <AnimatedGroup className="contents">
-                {features.map((feature, index) => (
-                  <FeatureCard
-                    key={index}
-                    icon={feature.icon}
-                    title={feature.title}
-                    description={feature.description}
-                  />
-                ))}
-              </AnimatedGroup>
-            </div>
-          </div>
-        </section>
-        
-        {/* CTA Section */}
-        <section className="py-20 md:py-32">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="rounded-3xl bg-gradient-to-r from-blue-900/40 to-purple-900/40 backdrop-blur-sm border border-blue-500/20 p-8 md:p-16 max-w-5xl mx-auto shadow-2xl">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left">
-                <div className="flex-1">
-                  <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-4">
-                    Ready to renew your subscription?
-                  </h2>
-                  <p className="text-lg sm:text-xl text-gray-300 leading-relaxed text-justify">
-                    Don&apos;t miss out on our special renewal offers. Renew today and get an extra month free!
-                  </p>
-                </div>
-                <Button 
-                  className="h-14 px-10 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25"
-                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                >
-                  <span>Renew Now</span>
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
-              </div>
             </div>
           </div>
         </section>
