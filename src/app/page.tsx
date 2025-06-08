@@ -281,6 +281,22 @@ const formatPhoneNumber = (phone: string): string => {
   return phone;
 };
 
+const calculateDaysToExpiry = (expiryDate: string): number | null => {
+  if (!expiryDate || expiryDate === '0000-00-00' || expiryDate === '0000-00-00 00:00:00') {
+    return null;
+  }
+  
+  try {
+    const expiry = new Date(expiryDate);
+    const now = new Date();
+    const diffTime = expiry.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  } catch {
+    return null;
+  }
+};
+
 // Account status helper function
 const getAccountStatus = (userData: UserData): {
   status: 'ACTIVE' | 'EXPIRED' | 'INACTIVE';
@@ -455,6 +471,7 @@ const UserDetails: React.FC<UserDetailsProps> = ({
   isProcessingPayment 
 }) => {
   const accountStatus = getAccountStatus(userData);
+  const daysToExpiry = calculateDaysToExpiry(userData.expiry || '');
   
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6">
@@ -463,52 +480,66 @@ const UserDetails: React.FC<UserDetailsProps> = ({
         animate={{ opacity: 1, y: 0 }}
         className="grid grid-cols-1 md:grid-cols-2 gap-6"
       >
-        {/* User Information Card */}
+        {/* Account Status Card - Now in first position */}
         <Card className="border-gray-700/50 bg-gray-900/70 backdrop-blur-sm shadow-2xl">
           <CardHeader>
             <div className="flex items-center gap-3">
-              <div className="rounded-full bg-blue-500/20 p-3 text-blue-400">
-                <User className="h-6 w-6" />
+              <div className="rounded-full bg-yellow-500/20 p-3 text-yellow-400">
+                <Calendar className="h-6 w-6" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-100">Account Details</h3>
+              <h3 className="text-xl font-semibold text-gray-100">Account Status</h3>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 text-sm">
-              <div className="flex justify-between items-center py-2 border-b border-gray-700/30">
-                <span className="text-gray-400 font-medium">Name</span>
-                <span className="text-gray-100 font-semibold text-right">
-                  {userData.firstname} {userData.lastname}
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between items-center py-1">
+                <span className="text-gray-400 font-medium">Status</span>
+                <span className={`font-bold px-3 py-1 rounded-full text-xs ${accountStatus.color} ${accountStatus.bgColor} border ${accountStatus.borderColor}`}>
+                  {accountStatus.status}
                 </span>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-700/30">
-                <span className="text-gray-400 font-medium">Email</span>
-                <span className="text-gray-100 font-medium text-right break-all">
-                  {userData.email || 'Not provided'}
+              
+              <div className="flex justify-between items-center py-1">
+                <span className="text-gray-400 font-medium">Credits</span>
+                <span className="text-gray-100 font-bold">
+                  {formatCurrency(userData.credits || 0)}
                 </span>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-700/30">
-                <span className="text-gray-400 font-medium">Company</span>
-                <span className="text-gray-100 font-medium text-right">
-                  {userData.company || 'N/A'}
+              
+              <div className="flex justify-between items-center py-1">
+                <span className="text-gray-400 font-medium">Expiry Date</span>
+                <span className={`font-semibold text-right ${accountStatus.status === 'EXPIRED' ? 'text-red-400' : 'text-green-400'}`}>
+                  {formatDate(userData.expiry || '')}
                 </span>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-700/30">
-                <span className="text-gray-400 font-medium">Phone</span>
-                <span className="text-gray-100 font-medium text-right">
-                  {formatPhoneNumber(userData.phone || userData.mobile || '')}
-                </span>
-              </div>
-              {(userData.address || userData.city || userData.state || userData.country) && (
-                <div className="py-2">
-                  <span className="text-gray-400 font-medium block mb-1">Address</span>
-                  <span className="text-gray-100 font-medium text-sm leading-relaxed">
-                    {[userData.address, userData.city, userData.state, userData.country]
-                      .filter(Boolean)
-                      .join(', ')}
+
+              {daysToExpiry !== null && (
+                <div className="flex justify-between items-center py-1">
+                  <span className="text-gray-400 font-medium">Days to Expiry</span>
+                  <span className={`font-bold text-lg ${
+                    daysToExpiry <= 0 ? 'text-red-400' : 
+                    daysToExpiry <= 7 ? 'text-yellow-400' : 
+                    'text-green-400'
+                  }`}>
+                    {daysToExpiry <= 0 ? 'Expired' : `${daysToExpiry} days`}
                   </span>
                 </div>
               )}
+            </div>
+
+            {/* Payment Button inside Account Status Card */}
+            <div className="pt-3 space-y-3">
+              <PaymentButton
+                paystackConfig={paystackConfig}
+                onPaymentSuccess={onPaymentSuccess}
+                onPaymentClose={onPaymentClose}
+                isProcessingPayment={isProcessingPayment}
+                servicePlan={servicePlan}
+              />
+              
+              <p className="text-gray-400 text-xs text-center">
+                Secure payment powered by Paystack • Renew {servicePlan.srvname || 'your plan'} for {servicePlan.timeunitexp || 30} days
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -565,38 +596,52 @@ const UserDetails: React.FC<UserDetailsProps> = ({
           </CardContent>
         </Card>
 
-        {/* Account Status Card */}
+        {/* User Information Card - Now in third position */}
         <Card className="border-gray-700/50 bg-gray-900/70 backdrop-blur-sm shadow-2xl">
           <CardHeader>
             <div className="flex items-center gap-3">
-              <div className="rounded-full bg-yellow-500/20 p-3 text-yellow-400">
-                <Calendar className="h-6 w-6" />
+              <div className="rounded-full bg-blue-500/20 p-3 text-blue-400">
+                <User className="h-6 w-6" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-100">Account Status</h3>
+              <h3 className="text-xl font-semibold text-gray-100">Account Details</h3>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-1 gap-3 text-sm">
               <div className="flex justify-between items-center py-2 border-b border-gray-700/30">
-                <span className="text-gray-400 font-medium">Status</span>
-                <span className={`font-bold px-3 py-1 rounded-full text-xs ${accountStatus.color} ${accountStatus.bgColor} border ${accountStatus.borderColor}`}>
-                  {accountStatus.status}
+                <span className="text-gray-400 font-medium">Name</span>
+                <span className="text-gray-100 font-semibold text-right">
+                  {userData.firstname} {userData.lastname}
                 </span>
               </div>
-              
               <div className="flex justify-between items-center py-2 border-b border-gray-700/30">
-                <span className="text-gray-400 font-medium">Credits</span>
-                <span className="text-gray-100 font-bold">
-                  {formatCurrency(userData.credits || 0)}
+                <span className="text-gray-400 font-medium">Email</span>
+                <span className="text-gray-100 font-medium text-right break-all">
+                  {userData.email || 'Not provided'}
                 </span>
               </div>
-              
-              <div className="py-2">
-                <span className="text-gray-400 font-medium block mb-1">Expiry Date</span>
-                <span className={`font-semibold ${accountStatus.status === 'EXPIRED' ? 'text-red-400' : 'text-green-400'}`}>
-                  {formatDate(userData.expiry || '')}
+              <div className="flex justify-between items-center py-2 border-b border-gray-700/30">
+                <span className="text-gray-400 font-medium">Company</span>
+                <span className="text-gray-100 font-medium text-right">
+                  {userData.company || 'N/A'}
                 </span>
               </div>
+              <div className="flex justify-between items-center py-2 border-b border-gray-700/30">
+                <span className="text-gray-400 font-medium">Phone</span>
+                <span className="text-gray-100 font-medium text-right">
+                  {formatPhoneNumber(userData.phone || userData.mobile || '')}
+                </span>
+              </div>
+              {(userData.address || userData.city || userData.state || userData.country) && (
+                <div className="py-2">
+                  <span className="text-gray-400 font-medium block mb-1">Address</span>
+                  <span className="text-gray-100 font-medium text-sm leading-relaxed">
+                    {[userData.address, userData.city, userData.state, userData.country]
+                      .filter(Boolean)
+                      .join(', ')}
+                  </span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -645,26 +690,6 @@ const UserDetails: React.FC<UserDetailsProps> = ({
             </div>
           </CardContent>
         </Card>
-      </motion.div>
-
-      {/* Renewal Button */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="text-center"
-      >
-        <PaymentButton
-          paystackConfig={paystackConfig}
-          onPaymentSuccess={onPaymentSuccess}
-          onPaymentClose={onPaymentClose}
-          isProcessingPayment={isProcessingPayment}
-          servicePlan={servicePlan}
-        />
-        
-        <p className="text-gray-400 text-sm mt-3">
-          Secure payment powered by Paystack • Renew {servicePlan.srvname || 'your plan'} for {servicePlan.timeunitexp || 30} days
-        </p>
       </motion.div>
     </div>
   );
