@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, Variants } from 'framer-motion';
 import { Search, Menu, X, User, Calendar, CreditCard, Globe } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
@@ -709,10 +710,10 @@ const Navbar: React.FC = () => {
   }, []);
 
   const menuItems = [
-    { name: 'Home', href: '#' },
-    { name: 'Plans', href: '#plans' },
-    { name: 'Features', href: '#features' },
-    { name: 'Support', href: '#support' },
+    { name: 'Home', href: '/' },
+    { name: 'Terms', href: '/terms' },
+    { name: 'Privacy', href: '/privacy' },
+    { name: 'Contact', href: '/contact' },
   ];
 
   return (
@@ -728,20 +729,20 @@ const Navbar: React.FC = () => {
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center">
               <a href="#" className="flex items-center space-x-2">
-                <span className="text-blue-400 font-bold text-2xl">PHS Web ISP</span>
+                <span className="text-blue-400 font-bold text-2xl">PHSWEB Internet</span>
               </a>
             </div>
 
             <div className="hidden md:block">
               <div className="ml-10 flex items-center space-x-4">
                 {menuItems.map((item, index) => (
-                  <a
+                  <Link
                     key={index}
                     href={item.href}
                     className="text-gray-300 hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
                   >
                     {item.name}
-                  </a>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -765,13 +766,13 @@ const Navbar: React.FC = () => {
           <div className="md:hidden bg-gray-900/95 backdrop-blur-lg border-t border-gray-700/50">
             <div className="space-y-1 px-2 pb-3 pt-2">
               {menuItems.map((item, index) => (
-                <a
+                <Link
                   key={index}
                   href={item.href}
                   className="text-gray-300 hover:text-blue-400 block px-3 py-2 rounded-md text-base font-medium"
                 >
                   {item.name}
-                </a>
+                </Link>
               ))}
               <div className="pt-4">
                 <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">Login</Button>
@@ -1057,22 +1058,18 @@ const ISPLandingPage: React.FC = () => {
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col items-center text-center max-w-4xl mx-auto">
               <AnimatedGroup>
-                <h1 className="text-5xl font-extrabold tracking-tight sm:text-6xl md:text-7xl mb-8">
+                <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl md:text-5xl mb-6">
                   <span className="block text-white mb-2">Renew Your</span>
                   <span className="block bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                    PHS Web ISP Subscription
+                    PHSWEB Internet Subscription
                   </span>
                 </h1>
-                
-                <p className="mt-8 max-w-3xl text-xl sm:text-2xl text-gray-300 leading-relaxed text-center">
-                  Stay connected with our premium internet services. Renew your subscription today for uninterrupted access to high-speed internet.
-                </p>
                 
                 <div className="mt-12 w-full max-w-6xl">
                   {renewalSuccess ? (
                     <div className="rounded-2xl bg-gradient-to-r from-green-600/90 to-emerald-600/90 backdrop-blur-sm p-6 text-white animate-fadeIn shadow-2xl border border-green-500/30 max-w-lg mx-auto">
                       <p className="font-semibold text-lg text-center">Renewal successful!</p>
-                      <p className="text-green-100 mt-2 text-center">Your subscription has been renewed. Thank you for choosing PHS Web ISP.</p>
+                      <p className="text-green-100 mt-2 text-center">Your subscription has been renewed. Thank you for choosing PHSWEB Internet.</p>
                     </div>
                   ) : userData && servicePlan ? (
                     <div className="space-y-6">
@@ -1096,8 +1093,13 @@ const ISPLandingPage: React.FC = () => {
                       />
                     </div>
                   ) : (
-                    <div className="max-w-lg mx-auto">
+                    <div className="max-w-lg mx-auto space-y-6">
                       <RenewalForm onSubmit={handleAccountLookup} isLoading={isLoading} />
+                      
+                      <p className="max-w-3xl text-xl sm:text-2xl text-gray-300 leading-relaxed text-center">
+                        Stay connected with our premium internet services. Renew your subscription today for uninterrupted access to high-speed internet.
+                      </p>
+                      
                       {error && (
                         <div className="mt-4 rounded-xl bg-red-600/90 backdrop-blur-sm p-4 text-white shadow-2xl border border-red-500/30">
                           <p className="text-center">{error}</p>
@@ -1117,25 +1119,25 @@ const ISPLandingPage: React.FC = () => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center justify-between md:flex-row max-w-6xl mx-auto">
             <div className="mb-8 md:mb-0 text-center md:text-left">
-              <span className="text-blue-400 font-bold text-2xl">PHS Web ISP</span>
+              <span className="text-blue-400 font-bold text-2xl">PHSWEB Internet</span>
               <p className="mt-3 text-gray-400 text-justify max-w-xs">
                 Providing reliable internet services since 2010
               </p>
             </div>
             <div className="flex space-x-8">
-              <a href="#" className="text-gray-400 hover:text-blue-400 transition-colors">
+              <Link href="/terms" className="text-gray-400 hover:text-blue-400 transition-colors">
                 Terms
-              </a>
-              <a href="#" className="text-gray-400 hover:text-blue-400 transition-colors">
+              </Link>
+              <Link href="/privacy" className="text-gray-400 hover:text-blue-400 transition-colors">
                 Privacy
-              </a>
-              <a href="#" className="text-gray-400 hover:text-blue-400 transition-colors">
+              </Link>
+              <Link href="/contact" className="text-gray-400 hover:text-blue-400 transition-colors">
                 Contact
-              </a>
+              </Link>
             </div>
           </div>
           <div className="mt-12 border-t border-gray-700/50 pt-8 text-center text-gray-400">
-            &copy; {new Date().getFullYear()} PHS Web ISP. All rights reserved.
+            &copy; {new Date().getFullYear()} PHSWEB Internet. All rights reserved.
           </div>
         </div>
       </footer>
