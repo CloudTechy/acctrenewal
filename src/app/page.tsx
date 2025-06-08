@@ -500,42 +500,42 @@ const UserDetails: React.FC<UserDetailsProps> = ({
         animate={{ opacity: 1, y: 0 }}
         className="grid grid-cols-1 md:grid-cols-2 gap-6"
       >
-        {/* Account Status Card - Now in first position */}
-        <Card className="border-gray-700/50 bg-gray-900/70 backdrop-blur-sm shadow-2xl">
-          <CardHeader>
+        {/* Account Status Card */}
+        <Card className="border-gray-700/50 bg-gray-900/80 backdrop-blur-sm shadow-2xl hover:shadow-blue-500/10 transition-all duration-300">
+          <CardHeader className="pb-4">
             <div className="flex items-center gap-3">
-              <div className="rounded-full bg-yellow-500/20 p-3 text-yellow-400">
+              <div className="rounded-xl bg-blue-500/20 p-3 text-blue-400 ring-1 ring-blue-500/30">
                 <Calendar className="h-6 w-6" />
               </div>
               <h3 className="text-xl font-semibold text-gray-100">Account Status</h3>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between items-center py-1">
-                <span className="text-gray-400 font-medium">Status</span>
-                <span className={`font-bold px-3 py-1 rounded-full text-xs ${accountStatus.color} ${accountStatus.bgColor} border ${accountStatus.borderColor}`}>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-gray-400 font-medium text-sm">Status</span>
+                <span className={`font-bold px-3 py-1.5 rounded-lg text-xs uppercase tracking-wider ${accountStatus.color} ${accountStatus.bgColor} border ${accountStatus.borderColor}`}>
                   {accountStatus.status}
                 </span>
               </div>
               
-              <div className="flex justify-between items-center py-1">
-                <span className="text-gray-400 font-medium">Credits</span>
-                <span className="text-gray-100 font-bold">
+              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-gray-400 font-medium text-sm">Credits</span>
+                <span className="text-gray-100 font-bold text-lg">
                   {formatCurrency(userData.credits || 0)}
                 </span>
               </div>
               
-              <div className="flex justify-between items-center py-1">
-                <span className="text-gray-400 font-medium">Expiry Date</span>
-                <span className={`font-semibold text-right ${accountStatus.status === 'EXPIRED' ? 'text-red-400' : 'text-green-400'}`}>
+              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-gray-400 font-medium text-sm">Expiry Date</span>
+                <span className={`font-semibold text-right text-sm ${accountStatus.status === 'EXPIRED' ? 'text-red-400' : 'text-green-400'}`}>
                   {formatDate(userData.expiry || '')}
                 </span>
               </div>
 
               {daysToExpiry !== null && (
-                <div className="flex justify-between items-center py-1">
-                  <span className="text-gray-400 font-medium">Days to Expiry</span>
+                <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                  <span className="text-gray-400 font-medium text-sm">Days to Expiry</span>
                   <span className={`font-bold text-lg ${
                     daysToExpiry <= 0 ? 'text-red-400' : 
                     daysToExpiry <= 7 ? 'text-yellow-400' : 
@@ -547,8 +547,8 @@ const UserDetails: React.FC<UserDetailsProps> = ({
               )}
             </div>
 
-            {/* Payment Button inside Account Status Card */}
-            <div className="pt-3 space-y-3">
+            {/* Payment Button */}
+            <div className="pt-4 space-y-3 border-t border-gray-700/30">
               <PaymentButton
                 paystackConfig={paystackConfig}
                 onPaymentSuccess={onPaymentSuccess}
@@ -557,104 +557,113 @@ const UserDetails: React.FC<UserDetailsProps> = ({
                 servicePlan={servicePlan}
               />
               
-              <p className="text-gray-400 text-xs text-center">
-                Secure payment powered by Paystack • Renew {servicePlan.srvname || 'your plan'} for {servicePlan.timeunitexp || 30} days
+              <p className="text-gray-400 text-xs text-center leading-relaxed">
+                Secure payment powered by Paystack<br />
+                Renew <span className="text-blue-400 font-medium">{servicePlan.srvname || 'your plan'}</span> for {servicePlan.timeunitexp || 30} days
               </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Service Plan Card */}
-        <Card className="border-gray-700/50 bg-gray-900/70 backdrop-blur-sm shadow-2xl">
-          <CardHeader>
+        {/* Current Plan Card */}
+        <Card className="border-gray-700/50 bg-gray-900/80 backdrop-blur-sm shadow-2xl hover:shadow-green-500/10 transition-all duration-300">
+          <CardHeader className="pb-4">
             <div className="flex items-center gap-3">
-              <div className="rounded-full bg-green-500/20 p-3 text-green-400">
+              <div className="rounded-xl bg-green-500/20 p-3 text-green-400 ring-1 ring-green-500/30">
                 <Globe className="h-6 w-6" />
               </div>
               <h3 className="text-xl font-semibold text-gray-100">Current Plan</h3>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-3 text-sm">
-              <div className="text-center py-3 bg-gradient-to-r from-green-600/20 to-blue-600/20 rounded-lg border border-green-500/30">
-                <span className="text-gray-400 text-xs block mb-1">Plan Name</span>
-                <span className="text-gray-100 font-bold text-lg">
+            <div className="space-y-3">
+              <div className="text-center py-4 px-3 bg-gradient-to-r from-green-600/20 to-blue-600/20 rounded-xl border border-green-500/30 ring-1 ring-green-500/10">
+                <span className="text-gray-400 text-xs block mb-2 uppercase tracking-wider font-medium">Plan Name</span>
+                <span className="text-gray-100 font-bold text-lg leading-tight">
                   {servicePlan.srvname || 'Loading...'}
                 </span>
               </div>
               
-              <div className="text-center py-3 bg-gradient-to-r from-yellow-600/20 to-orange-600/20 rounded-lg border border-yellow-500/30">
-                <span className="text-gray-400 text-xs block mb-1">Monthly Price</span>
-                <span className="text-yellow-400 font-bold text-xl">
+              <div className="text-center py-4 px-3 bg-gradient-to-r from-yellow-600/20 to-orange-600/20 rounded-xl border border-yellow-500/30 ring-1 ring-yellow-500/10">
+                <span className="text-gray-400 text-xs block mb-2 uppercase tracking-wider font-medium">Monthly Price</span>
+                <span className="text-yellow-400 font-bold text-2xl">
                   {formatCurrency(servicePlan.totalPrice || 0)}
                 </span>
                 {(servicePlan.unitpricetax && servicePlan.unitpricetax > 0) && (
-                  <div className="text-xs text-gray-400 mt-1">
-                    Base: {formatCurrency(servicePlan.unitprice || 0)} + Tax: {formatCurrency(servicePlan.unitpricetax || 0)}
+                  <div className="text-xs text-gray-400 mt-2 space-x-1">
+                    <span>Base: {formatCurrency(servicePlan.unitprice || 0)}</span>
+                    <span>•</span>
+                    <span>Tax: {formatCurrency(servicePlan.unitpricetax || 0)}</span>
                   </div>
                 )}
               </div>
               
-              {servicePlan.timeunitexp && (
-                <div className="text-center py-2 bg-blue-600/10 rounded-lg border border-blue-500/20">
-                  <span className="text-gray-400 text-xs block mb-1">Validity Period</span>
-                  <span className="text-blue-300 font-medium text-sm">
-                    {servicePlan.timeunitexp} days
-                  </span>
-                </div>
-              )}
+              <div className="grid grid-cols-2 gap-3">
+                {servicePlan.timeunitexp && (
+                  <div className="text-center py-3 px-2 bg-blue-600/10 rounded-lg border border-blue-500/20">
+                    <span className="text-gray-400 text-xs block mb-1 uppercase tracking-wider font-medium">Validity</span>
+                    <span className="text-blue-300 font-bold text-sm">
+                      {servicePlan.timeunitexp} days
+                    </span>
+                  </div>
+                )}
 
-              {servicePlan.poolname && (
-                <div className="text-center py-2 bg-gray-600/10 rounded-lg border border-gray-500/20">
-                  <span className="text-gray-400 text-xs block mb-1">IP Pool</span>
-                  <span className="text-gray-300 font-medium text-sm">
-                    {servicePlan.poolname}
-                  </span>
-                </div>
-              )}
+                {servicePlan.poolname && (
+                  <div className="text-center py-3 px-2 bg-purple-600/10 rounded-lg border border-purple-500/20">
+                    <span className="text-gray-400 text-xs block mb-1 uppercase tracking-wider font-medium">IP Pool</span>
+                    <span className="text-purple-300 font-bold text-sm truncate">
+                      {servicePlan.poolname}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* User Information Card - Now in third position */}
-        <Card className="border-gray-700/50 bg-gray-900/70 backdrop-blur-sm shadow-2xl">
-          <CardHeader>
+        {/* Account Details Card */}
+        <Card className="border-gray-700/50 bg-gray-900/80 backdrop-blur-sm shadow-2xl hover:shadow-purple-500/10 transition-all duration-300">
+          <CardHeader className="pb-4">
             <div className="flex items-center gap-3">
-              <div className="rounded-full bg-blue-500/20 p-3 text-blue-400">
+              <div className="rounded-xl bg-purple-500/20 p-3 text-purple-400 ring-1 ring-purple-500/30">
                 <User className="h-6 w-6" />
               </div>
               <h3 className="text-xl font-semibold text-gray-100">Account Details</h3>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 text-sm">
-              <div className="flex justify-between items-center py-2 border-b border-gray-700/30">
-                <span className="text-gray-400 font-medium">Name</span>
-                <span className="text-gray-100 font-semibold text-right">
+            <div className="space-y-3">
+              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-gray-400 font-medium text-sm">Name</span>
+                <span className="text-gray-100 font-semibold text-right text-sm">
                   {userData.firstname} {userData.lastname}
                 </span>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-700/30">
-                <span className="text-gray-400 font-medium">Email</span>
-                <span className="text-gray-100 font-medium text-right break-all">
+              
+              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-gray-400 font-medium text-sm">Email</span>
+                <span className="text-gray-100 font-medium text-right text-sm break-all">
                   {userData.email || 'Not provided'}
                 </span>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-700/30">
-                <span className="text-gray-400 font-medium">Company</span>
-                <span className="text-gray-100 font-medium text-right">
+              
+              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-gray-400 font-medium text-sm">Company</span>
+                <span className="text-gray-100 font-medium text-right text-sm">
                   {userData.company || 'N/A'}
                 </span>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-700/30">
-                <span className="text-gray-400 font-medium">Phone</span>
-                <span className="text-gray-100 font-medium text-right">
+              
+              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-gray-400 font-medium text-sm">Phone</span>
+                <span className="text-gray-100 font-medium text-right text-sm">
                   {formatPhoneNumber(userData.phone || userData.mobile || '')}
                 </span>
               </div>
+              
               {(userData.address || userData.city || userData.state || userData.country) && (
-                <div className="py-2">
-                  <span className="text-gray-400 font-medium block mb-1">Address</span>
+                <div className="py-3 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                  <span className="text-gray-400 font-medium text-sm block mb-2">Address</span>
                   <span className="text-gray-100 font-medium text-sm leading-relaxed">
                     {[userData.address, userData.city, userData.state, userData.country]
                       .filter(Boolean)
@@ -666,11 +675,11 @@ const UserDetails: React.FC<UserDetailsProps> = ({
           </CardContent>
         </Card>
 
-        {/* Usage Information Card */}
-        <Card className="border-gray-700/50 bg-gray-900/70 backdrop-blur-sm shadow-2xl">
-          <CardHeader>
+        {/* Usage Details Card */}
+        <Card className="border-gray-700/50 bg-gray-900/80 backdrop-blur-sm shadow-2xl hover:shadow-orange-500/10 transition-all duration-300">
+          <CardHeader className="pb-4">
             <div className="flex items-center gap-3">
-              <div className="rounded-full bg-purple-500/20 p-3 text-purple-400">
+              <div className="rounded-xl bg-orange-500/20 p-3 text-orange-400 ring-1 ring-orange-500/30">
                 <CreditCard className="h-6 w-6" />
               </div>
               <h3 className="text-xl font-semibold text-gray-100">Usage Details</h3>
@@ -680,8 +689,8 @@ const UserDetails: React.FC<UserDetailsProps> = ({
             <div className="space-y-3">
               {/* Download Usage - Only show if used > 0 */}
               {formatUsageData(userData.dlbytes || 0).isNegative && (
-                <div className="flex justify-between items-center p-3 bg-blue-600/10 rounded-lg border border-blue-500/20">
-                  <span className="text-gray-400 font-medium">Download Used</span>
+                <div className="flex justify-between items-center py-3 px-3 rounded-lg bg-gradient-to-r from-red-600/10 to-red-500/5 border border-red-500/20 ring-1 ring-red-500/10">
+                  <span className="text-gray-400 font-medium text-sm">Download Used</span>
                   <span className="text-red-400 font-bold text-lg">
                     {formatUsageData(userData.dlbytes || 0).used}
                   </span>
@@ -690,9 +699,9 @@ const UserDetails: React.FC<UserDetailsProps> = ({
               
               {/* Upload Usage - Only show if used > 0 */}
               {formatUsageData(userData.ulbytes || 0).isNegative && (
-                <div className="flex justify-between items-center p-3 bg-purple-600/10 rounded-lg border border-purple-500/20">
-                  <span className="text-gray-400 font-medium">Upload Used</span>
-                  <span className="text-red-400 font-bold text-lg">
+                <div className="flex justify-between items-center py-3 px-3 rounded-lg bg-gradient-to-r from-pink-600/10 to-pink-500/5 border border-pink-500/20 ring-1 ring-pink-500/10">
+                  <span className="text-gray-400 font-medium text-sm">Upload Used</span>
+                  <span className="text-pink-400 font-bold text-lg">
                     {formatUsageData(userData.ulbytes || 0).used}
                   </span>
                 </div>
@@ -700,8 +709,8 @@ const UserDetails: React.FC<UserDetailsProps> = ({
               
               {/* Total Used - Show if either download or upload has been used */}
               {(formatUsageData(userData.dlbytes || 0).isNegative || formatUsageData(userData.ulbytes || 0).isNegative) && (
-                <div className="flex justify-between items-center p-3 bg-yellow-600/10 rounded-lg border border-yellow-500/20">
-                  <span className="text-gray-400 font-medium">Total Used</span>
+                <div className="flex justify-between items-center py-3 px-3 rounded-lg bg-gradient-to-r from-yellow-600/15 to-orange-600/10 border border-yellow-500/30 ring-1 ring-yellow-500/15">
+                  <span className="text-gray-400 font-medium text-sm">Total Used</span>
                   <span className="text-yellow-400 font-bold text-lg">
                     {formatBytes(Math.abs(userData.dlbytes || 0) + Math.abs(userData.ulbytes || 0))}
                   </span>
@@ -710,8 +719,8 @@ const UserDetails: React.FC<UserDetailsProps> = ({
               
               {/* Total Remaining - Only show if remaining > 0 */}
               {!formatUsageData(userData.totalbytes || 0).isNegative && userData.totalbytes && userData.totalbytes > 0 && (
-                <div className="flex justify-between items-center p-3 bg-green-600/10 rounded-lg border border-green-500/20">
-                  <span className="text-gray-400 font-medium">Total Remaining</span>
+                <div className="flex justify-between items-center py-3 px-3 rounded-lg bg-gradient-to-r from-green-600/10 to-emerald-600/5 border border-green-500/20 ring-1 ring-green-500/10">
+                  <span className="text-gray-400 font-medium text-sm">Total Remaining</span>
                   <span className="text-green-400 font-bold text-lg">
                     {formatUsageData(userData.totalbytes || 0).remaining}
                   </span>
@@ -720,9 +729,9 @@ const UserDetails: React.FC<UserDetailsProps> = ({
               
               {/* Online Time - Only show if > 0 */}
               {userData.onlinetime && userData.onlinetime > 0 && (
-                <div className="flex justify-between items-center p-3 bg-orange-600/10 rounded-lg border border-orange-500/20">
-                  <span className="text-gray-400 font-medium">Online Time Remaining</span>
-                  <span className="text-orange-400 font-bold text-lg">
+                <div className="flex justify-between items-center py-3 px-3 rounded-lg bg-gradient-to-r from-blue-600/10 to-cyan-600/5 border border-blue-500/20 ring-1 ring-blue-500/10">
+                  <span className="text-gray-400 font-medium text-sm">Online Time Remaining</span>
+                  <span className="text-blue-400 font-bold text-lg">
                     {Math.floor(userData.onlinetime / 3600)}h {Math.floor((userData.onlinetime % 3600) / 60)}m
                   </span>
                 </div>
@@ -733,7 +742,7 @@ const UserDetails: React.FC<UserDetailsProps> = ({
                !formatUsageData(userData.ulbytes || 0).isNegative && 
                (!userData.totalbytes || userData.totalbytes <= 0) && 
                (!userData.onlinetime || userData.onlinetime <= 0) && (
-                <div className="text-center p-6 bg-gray-600/10 rounded-lg border border-gray-500/20">
+                <div className="text-center py-8 px-3 bg-gray-600/10 rounded-lg border border-gray-500/20">
                   <span className="text-gray-400 text-sm">No usage data available</span>
                 </div>
               )}
