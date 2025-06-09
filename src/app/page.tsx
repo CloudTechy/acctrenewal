@@ -648,13 +648,6 @@ const UserDetails: React.FC<UserDetailsProps> = ({
               </div>
               
               <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                <span className="text-gray-400 font-medium text-sm">Company</span>
-                <span className="text-gray-100 font-medium text-right text-sm">
-                  {userData.company || 'N/A'}
-                </span>
-              </div>
-              
-              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
                 <span className="text-gray-400 font-medium text-sm">Phone</span>
                 <span className="text-gray-100 font-medium text-right text-sm">
                   {formatPhoneNumber(userData.phone || userData.mobile || '')}
