@@ -810,7 +810,9 @@ const Navbar: React.FC = () => {
             </div>
 
             <div className="hidden md:block">
-              <Button className="bg-blue-600 hover:bg-blue-700 text-white">Login</Button>
+              <Link href="/login">
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white">Login</Button>
+              </Link>
             </div>
 
             <div className="md:hidden">
@@ -837,7 +839,9 @@ const Navbar: React.FC = () => {
                 </Link>
               ))}
               <div className="pt-4">
-                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">Login</Button>
+                <Link href="/login">
+                  <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">Login</Button>
+                </Link>
               </div>
             </div>
           </div>
