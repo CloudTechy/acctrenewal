@@ -184,9 +184,9 @@ const PrivacyPage: React.FC = () => {
               <div className="space-y-2 text-gray-300">
                 <p>For privacy-related questions or to exercise your rights, contact us:</p>
                 <div className="bg-gray-800/50 rounded-lg p-4 mt-4">
-                  <p><strong>Privacy Officer:</strong> privacy@phswebinternet.com</p>
-                  <p><strong>Phone:</strong> +234 123 456 7890</p>
-                  <p><strong>Address:</strong> PHSWEB Internet, Lagos, Nigeria</p>
+                  <p><strong>Privacy Officer:</strong> legal@phsweb.ng</p>
+                  <p><strong>Phone:</strong> 02014101240</p>
+                  <p><strong>Address:</strong> 2nd floor, Grace And Faith House, Onitsha - Enugu Expy, Awka 420212, Anambra</p>
                 </div>
               </div>
             </section>
