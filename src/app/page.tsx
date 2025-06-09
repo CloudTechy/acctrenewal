@@ -1152,7 +1152,7 @@ const ISPLandingPage: React.FC = () => {
                 <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl md:text-5xl mb-6">
                   <span className="block text-white mb-2">Renew Your</span>
                   <span className="block bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                    PHSWEB Internet Subscription
+                    Internet Subscription
                   </span>
                 </h1>
                 
