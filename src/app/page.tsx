@@ -1040,6 +1040,8 @@ const ISPLandingPage: React.FC = () => {
           srvid: servicePlan?.srvid,
           timeunitexp: servicePlan?.timeunitexp || 30,
           trafficunitcomb: servicePlan?.trafficunitcomb || 0,
+          limitcomb: servicePlan?.limitcomb || 0,
+          currentExpiry: userData?.expiry
         }),
       });
 

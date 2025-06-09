@@ -12,7 +12,9 @@ interface RenewalRequest {
   username: string;
   srvid: number;
   timeunitexp: number;
-  trafficunitcomb?: number; // Add traffic unit for combined traffic plans
+  trafficunitcomb?: number;
+  limitcomb?: number;
+  currentExpiry?: string; // Add current user expiry for proper date calculation
 }
 
 interface AddCreditsResponse {
@@ -51,17 +53,73 @@ const verifyPaystackTransaction = async (reference: string): Promise<boolean> =>
   }
 };
 
+// Convert traffic units to bytes based on service plan configuration
+const convertTrafficToBytes = (trafficValue: number, limitValue: number): number => {
+  // If limitValue is 0, it's an unlimited plan - no data to add
+  if (limitValue === 0) {
+    return 0;
+  }
+  
+  // trafficunitcomb is typically in MB (based on screenshots showing 4572)
+  // Convert MB to bytes: 1 MB = 1,048,576 bytes
+  const bytesValue = trafficValue * 1048576;
+  
+  console.log(`Converting traffic: ${trafficValue} MB -> ${bytesValue} bytes`);
+  return bytesValue;
+};
+
+// Calculate proper expiry date based on current expiry and days to add
+const calculateNewExpiry = (currentExpiry: string | undefined, daysToAdd: number): Date => {
+  const now = new Date();
+  let baseDate = now;
+  
+  if (currentExpiry && currentExpiry !== '0000-00-00' && currentExpiry !== '0000-00-00 00:00:00') {
+    try {
+      const currentExpiryDate = new Date(currentExpiry);
+      
+      // If current expiry is in the future, use it as base date
+      if (currentExpiryDate > now) {
+        baseDate = currentExpiryDate;
+        console.log(`Current expiry ${currentExpiry} is in future, adding ${daysToAdd} days to it`);
+      } else {
+        console.log(`Current expiry ${currentExpiry} is in past, using current date as base and adding ${daysToAdd} days`);
+      }
+    } catch (parseError) {
+      console.log(`Invalid expiry date ${currentExpiry}, using current date as base:`, parseError);
+    }
+  } else {
+    console.log(`No valid expiry date provided, using current date as base`);
+  }
+  
+  // Add the specified number of days
+  const newExpiry = new Date(baseDate);
+  newExpiry.setDate(newExpiry.getDate() + daysToAdd);
+  
+  return newExpiry;
+};
+
 // Add credits to user via RADIUS Manager (handles both time and traffic credits)
 const addCreditsToUser = async (
   username: string, 
   daysToAdd: number, 
-  trafficToAdd: number = 0
+  trafficToAdd: number = 0,
+  currentExpiry?: string
 ): Promise<AddCreditsResponse> => {
   try {
+    // Calculate proper expiry based on current expiry and days to add
+    const newExpiryDate = calculateNewExpiry(currentExpiry, daysToAdd);
+    const formattedExpiry = newExpiryDate.toISOString().slice(0, 19).replace('T', ' '); // Format: YYYY-MM-DD HH:MM:SS
+    
+    console.log(`Calculated new expiry: ${formattedExpiry} (adding ${daysToAdd} days)`);
+    
     // Build URL with query parameters (same as other RADIUS API calls)
+    // For add_credits API: dlbytes=0, ulbytes=0, totalbytes=dataAmount, expiry=days, unit=DAY, onlinetime=0
     const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=add_credits&username=${encodeURIComponent(username)}&dlbytes=0&ulbytes=0&totalbytes=${trafficToAdd}&expiry=${daysToAdd}&unit=DAY&onlinetime=0`;
 
-    console.log('Adding credits to user:', username, 'with', daysToAdd, 'days and', trafficToAdd, 'bytes of traffic');
+    console.log('Adding credits to user:', username);
+    console.log('- Days to add:', daysToAdd);
+    console.log('- Traffic to add (bytes):', trafficToAdd);
+    console.log('- Calculated new expiry:', formattedExpiry);
     console.log('Using RADIUS API endpoint:', RADIUS_API_CONFIG.baseUrl);
     console.log('Making RADIUS API call to:', url.replace(RADIUS_API_CONFIG.apipass, '***'));
 
@@ -85,16 +143,18 @@ const addCreditsToUser = async (
       const parsed = JSON.parse(result);
       if (Array.isArray(parsed) && parsed[0] === 0) {
         // Success - extract the new expiry date from response
-        const newExpiry = parsed[5]; // expirydate is at index 5
-        console.log('Credits added successfully, new expiry:', newExpiry);
+        const responseExpiry = parsed[5]; // expirydate is at index 5
+        console.log('Credits added successfully, response expiry:', responseExpiry);
+        
+        // Use the calculated expiry as it's more reliable than the API response
         return { 
           success: true, 
-          newExpiry: newExpiry,
+          newExpiry: formattedExpiry, // Use our calculated expiry
           data: {
-            dlbytes: parsed[1],
-            ulbytes: parsed[2], 
-            totalbytes: parsed[3],
-            onlinetime: parsed[4]
+            dlbytes: parsed[1] || 0,
+            ulbytes: parsed[2] || 0, 
+            totalbytes: parsed[3] || 0,
+            onlinetime: parsed[4] || 0
           }
         };
       } else {
@@ -114,9 +174,17 @@ const addCreditsToUser = async (
 export async function POST(request: NextRequest) {
   try {
     const body: RenewalRequest = await request.json();
-    const { reference, username, srvid, timeunitexp, trafficunitcomb } = body;
+    const { reference, username, srvid, timeunitexp, trafficunitcomb, limitcomb, currentExpiry } = body;
 
-    console.log('Processing renewal:', { reference, username, srvid, timeunitexp, trafficunitcomb });
+    console.log('Processing renewal:', { 
+      reference, 
+      username, 
+      srvid, 
+      timeunitexp, 
+      trafficunitcomb, 
+      limitcomb,
+      currentExpiry 
+    });
 
     // Validate required fields
     if (!reference || !username || !srvid || !timeunitexp) {
@@ -135,12 +203,20 @@ export async function POST(request: NextRequest) {
 
     console.log('Payment verified successfully');
 
-    // Step 2: Add credits to user account
-    // - For unlimited plans: only add time (days)
+    // Step 2: Calculate traffic to add based on service plan
+    // - For unlimited plans (limitcomb = 0): only add time (days)
     // - For traffic-based plans: add both time and traffic
-    const trafficToAdd = trafficunitcomb || 0; // Use traffic unit from service plan, default to 0 for unlimited
+    const isUnlimitedPlan = !limitcomb || limitcomb === 0;
+    const trafficToAdd = isUnlimitedPlan ? 0 : convertTrafficToBytes(trafficunitcomb || 0, limitcomb || 0);
     
-    const addCreditsResult = await addCreditsToUser(username, timeunitexp, trafficToAdd);
+    console.log('Service plan analysis:');
+    console.log('- Is unlimited plan:', isUnlimitedPlan);
+    console.log('- Traffic unit from plan:', trafficunitcomb);
+    console.log('- Limit combined:', limitcomb);
+    console.log('- Traffic to add (bytes):', trafficToAdd);
+    
+    // Step 3: Add credits to user account
+    const addCreditsResult = await addCreditsToUser(username, timeunitexp, trafficToAdd, currentExpiry);
     if (!addCreditsResult.success) {
       return NextResponse.json({ 
         error: 'Failed to add credits to account' 
@@ -157,8 +233,10 @@ export async function POST(request: NextRequest) {
       reference: reference,
       creditsAdded: {
         days: timeunitexp,
-        traffic: trafficToAdd
-      }
+        trafficBytes: trafficToAdd,
+        trafficMB: isUnlimitedPlan ? 'unlimited' : Math.round(trafficToAdd / 1048576)
+      },
+      planType: isUnlimitedPlan ? 'unlimited' : 'limited'
     });
 
   } catch (error) {
