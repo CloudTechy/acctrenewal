@@ -748,7 +748,7 @@ const UserDetails: React.FC<UserDetailsProps> = ({
 };
 
 // Navbar Component
-const Navbar: React.FC = () => {
+const Navbar: React.FC<{ onHomeClick?: () => void }> = ({ onHomeClick }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -767,6 +767,13 @@ const Navbar: React.FC = () => {
     { name: 'Contact', href: '/contact' },
   ];
 
+  const handleHomeClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (onHomeClick) {
+      onHomeClick();
+    }
+  };
+
   return (
     <header>
       <nav
@@ -779,7 +786,7 @@ const Navbar: React.FC = () => {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center">
-              <Link href="/" className="flex items-center space-x-2">
+              <Link href="/" onClick={handleHomeClick} className="flex items-center space-x-2">
                 <img 
                   src="/phsweblogo.png" 
                   alt="PHSWEB Internet" 
@@ -791,13 +798,24 @@ const Navbar: React.FC = () => {
             <div className="hidden md:block">
               <div className="ml-10 flex items-center space-x-4">
                 {menuItems.map((item, index) => (
-                  <Link
-                    key={index}
-                    href={item.href}
-                    className="text-gray-300 hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                  >
-                    {item.name}
-                  </Link>
+                  item.name === 'Home' ? (
+                    <Link
+                      key={index}
+                      href={item.href}
+                      onClick={handleHomeClick}
+                      className="text-gray-300 hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                    >
+                      {item.name}
+                    </Link>
+                  ) : (
+                    <Link
+                      key={index}
+                      href={item.href}
+                      className="text-gray-300 hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                    >
+                      {item.name}
+                    </Link>
+                  )
                 ))}
               </div>
             </div>
@@ -823,13 +841,24 @@ const Navbar: React.FC = () => {
           <div className="md:hidden bg-gray-900/95 backdrop-blur-lg border-t border-gray-700/50">
             <div className="space-y-1 px-2 pb-3 pt-2">
               {menuItems.map((item, index) => (
-                <Link
-                  key={index}
-                  href={item.href}
-                  className="text-gray-300 hover:text-blue-400 block px-3 py-2 rounded-md text-base font-medium"
-                >
-                  {item.name}
-                </Link>
+                item.name === 'Home' ? (
+                  <Link
+                    key={index}
+                    href={item.href}
+                    onClick={handleHomeClick}
+                    className="text-gray-300 hover:text-blue-400 block px-3 py-2 rounded-md text-base font-medium"
+                  >
+                    {item.name}
+                  </Link>
+                ) : (
+                  <Link
+                    key={index}
+                    href={item.href}
+                    className="text-gray-300 hover:text-blue-400 block px-3 py-2 rounded-md text-base font-medium"
+                  >
+                    {item.name}
+                  </Link>
+                )
               ))}
               <div className="pt-4">
                 <Link href="/login">
@@ -1112,7 +1141,7 @@ const ISPLandingPage: React.FC = () => {
       <div className="absolute inset-0 bg-gradient-to-b from-blue-900/20 via-purple-900/10 to-gray-900/30"></div>
       <GradientBars />
       
-      <Navbar />
+      <Navbar onHomeClick={resetForm} />
       
       <main className="relative z-10">
         {/* Hero Section */}
