@@ -762,6 +762,7 @@ const Navbar: React.FC<{ onHomeClick?: () => void }> = ({ onHomeClick }) => {
 
   const menuItems = [
     { name: 'Home', href: '/' },
+    { name: 'Hotspot', href: '/hotspot' },
     { name: 'Terms', href: '/terms' },
     { name: 'Privacy', href: '/privacy' },
     { name: 'Contact', href: '/contact' },
