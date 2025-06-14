@@ -82,7 +82,7 @@ const locations: Record<string, LocationInfo> = {
 };
 
 interface HotspotLoginPageProps {
-  params: { locationId: string };
+  params: Promise<{ locationId: string }>;
 }
 
 export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
@@ -91,6 +91,7 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [locationId, setLocationId] = useState<string>('');
 
   // Essential MikroTik parameters
   const linkLogin = searchParams.get('link-login');
@@ -99,8 +100,17 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
   const mac = searchParams.get('mac');
   const ip = searchParams.get('ip');
 
-  // Get location info
-  const locationInfo = locations[params.locationId.toLowerCase()] || locations.default;
+  // Get location info once we have the locationId
+  const locationInfo = locations[locationId.toLowerCase()] || locations.default;
+
+  // Resolve params Promise and extract locationId
+  useEffect(() => {
+    const resolveParams = async () => {
+      const resolvedParams = await params;
+      setLocationId(resolvedParams.locationId);
+    };
+    resolveParams();
+  }, [params]);
 
   // Set error from URL parameter
   useEffect(() => {
@@ -125,7 +135,7 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
             </p>
             <div className="mt-6 p-4 bg-gray-50 rounded-lg text-sm text-gray-500">
               <p><strong>Debug Info:</strong></p>
-              <p>Location: {params.locationId}</p>
+              <p>Location: {locationId}</p>
               <p>Missing: link-login parameter</p>
             </div>
           </CardContent>
