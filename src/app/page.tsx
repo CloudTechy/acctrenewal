@@ -1251,7 +1251,7 @@ const ISPLandingPage: React.FC = () => {
             <div className="mb-8 md:mb-0 text-center md:text-left">
               <span className="text-blue-400 font-bold text-xl">PHSWEB Internet</span>
               <p className="mt-3 text-gray-400 text-justify max-w-xs">
-                Providing reliable internet services since 2010
+                Providing reliable internet services since 2022
               </p>
             </div>
             <div className="flex space-x-8">
