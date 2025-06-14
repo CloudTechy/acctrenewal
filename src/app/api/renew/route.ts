@@ -1,4 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { 
+  getCustomerByUsername, 
+  createOrUpdateCustomer, 
+  createRenewalTransaction,
+  calculateCommission,
+  getAccountOwner
+} from '@/lib/database';
 
 // Server-side API configuration (same as user API for consistency)
 const RADIUS_API_CONFIG = {
@@ -232,6 +239,60 @@ export async function POST(request: NextRequest) {
 
     console.log('Payment verified successfully');
 
+    // Step 1.5: Get payment amount and handle commission tracking
+    let paymentAmount = 0;
+    const servicePlanName = '';
+    let commissionAmount = 0;
+    let accountOwnerId: string | undefined = undefined;
+    let customerId: string | undefined = undefined;
+    
+    try {
+      // Get payment details from Paystack
+      const paystackResponse = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (paystackResponse.ok) {
+        const paystackData = await paystackResponse.json();
+        paymentAmount = paystackData.data.amount / 100; // Convert from kobo to naira
+        console.log('Payment amount:', paymentAmount);
+      }
+
+      // Look up customer to see if they have an assigned owner
+      const customer = await getCustomerByUsername(username);
+      
+      if (customer) {
+        customerId = customer.id;
+        accountOwnerId = customer.account_owner_id || undefined;
+        
+        if (accountOwnerId && paymentAmount > 0) {
+          // Get owner details to get commission rate
+          const owner = await getAccountOwner(accountOwnerId);
+          if (owner) {
+            commissionAmount = calculateCommission(paymentAmount, owner.commission_rate);
+            console.log(`Commission calculated: ${commissionAmount} (${owner.commission_rate}% of ${paymentAmount}) for owner: ${owner.name}`);
+          }
+        } else {
+          console.log('Customer has no assigned owner - no commission will be tracked');
+        }
+      } else {
+        console.log('Customer not found in database - creating basic record');
+        // Create basic customer record for future assignment
+        const newCustomer = await createOrUpdateCustomer({
+          username: username,
+        });
+        if (newCustomer) {
+          customerId = newCustomer.id;
+        }
+      }
+    } catch (error) {
+      console.error('Error in commission tracking setup:', error);
+      // Continue with renewal even if commission tracking fails
+    }
+
     // Step 2: Calculate traffic to add based on service plan
     // - For unlimited plans (limitcomb = 0): only add time (days)
     // - For traffic-based plans: add both time and traffic
@@ -254,6 +315,41 @@ export async function POST(request: NextRequest) {
 
     console.log('Account renewal completed successfully');
 
+    // Step 4: Record the renewal transaction for commission tracking
+    try {
+      if (paymentAmount > 0) {
+        const renewalStartDate = new Date();
+        const renewalEndDate = new Date(addCreditsResult.newExpiry || '');
+
+        const transactionData = {
+          customer_id: customerId,
+          account_owner_id: accountOwnerId,
+          username: username,
+          service_plan_id: srvid,
+          service_plan_name: servicePlanName || `Service Plan ${srvid}`,
+          amount_paid: paymentAmount,
+          commission_rate: accountOwnerId ? 10.00 : 0, // Default rate
+          commission_amount: commissionAmount,
+          paystack_reference: reference,
+          payment_status: 'success',
+          renewal_period_days: timeunitexp,
+          renewal_start_date: renewalStartDate.toISOString(),
+          renewal_end_date: renewalEndDate.toISOString(),
+          customer_location: '', // Could be populated from customer data
+        };
+
+        const transaction = await createRenewalTransaction(transactionData);
+        if (transaction) {
+          console.log('Renewal transaction recorded:', transaction.id);
+        } else {
+          console.error('Failed to record renewal transaction');
+        }
+      }
+    } catch (error) {
+      console.error('Error recording renewal transaction:', error);
+      // Don't fail the renewal if transaction recording fails
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Account renewed successfully',
@@ -265,7 +361,13 @@ export async function POST(request: NextRequest) {
         trafficBytes: trafficToAdd,
         trafficMB: isUnlimitedPlan ? 'unlimited' : Math.round(trafficToAdd / 1048576)
       },
-      planType: isUnlimitedPlan ? 'unlimited' : 'limited'
+      planType: isUnlimitedPlan ? 'unlimited' : 'limited',
+      // Include commission info in response (for debugging)
+      commissionInfo: {
+        hasOwner: !!accountOwnerId,
+        commissionAmount: commissionAmount,
+        paymentAmount: paymentAmount
+      }
     });
 
   } catch (error) {
