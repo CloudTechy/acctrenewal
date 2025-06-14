@@ -72,6 +72,7 @@ const convertTrafficToBytes = (trafficValue: number, limitValue: number): number
 const calculateNewExpiry = (currentExpiry: string | undefined, daysToAdd: number): Date => {
   const now = new Date();
   let baseDate = now;
+  let totalDaysToAdd = daysToAdd;
   
   if (currentExpiry && currentExpiry !== '0000-00-00' && currentExpiry !== '0000-00-00 00:00:00') {
     try {
@@ -82,7 +83,25 @@ const calculateNewExpiry = (currentExpiry: string | undefined, daysToAdd: number
         baseDate = currentExpiryDate;
         console.log(`Current expiry ${currentExpiry} is in future, adding ${daysToAdd} days to it`);
       } else {
-        console.log(`Current expiry ${currentExpiry} is in past, using current date as base and adding ${daysToAdd} days`);
+        // Calculate calendar days between expired date and current date
+        // Use date-only comparison to avoid timezone and time-of-day issues
+        const currentExpiryDateOnly = new Date(currentExpiryDate.getFullYear(), currentExpiryDate.getMonth(), currentExpiryDate.getDate());
+        const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        // Calculate the difference in days using UTC to avoid timezone issues
+        const timeDiff = nowDateOnly.getTime() - currentExpiryDateOnly.getTime();
+        const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+        
+        // Only add gap days if the account is actually expired (daysDiff > 0)
+        const gapDays = Math.max(0, daysDiff);
+        
+        // Total days to add = gap days + service plan days
+        totalDaysToAdd = gapDays + daysToAdd;
+        
+        console.log(`Current expiry ${currentExpiry} is in past`);
+        console.log(`Days expired (gap): ${gapDays}`);
+        console.log(`Service plan days: ${daysToAdd}`);
+        console.log(`Total days to add from current date: ${totalDaysToAdd}`);
       }
     } catch (parseError) {
       console.log(`Invalid expiry date ${currentExpiry}, using current date as base:`, parseError);
@@ -91,9 +110,9 @@ const calculateNewExpiry = (currentExpiry: string | undefined, daysToAdd: number
     console.log(`No valid expiry date provided, using current date as base`);
   }
   
-  // Add the specified number of days
+  // Add the calculated number of days to the base date
   const newExpiry = new Date(baseDate);
-  newExpiry.setDate(newExpiry.getDate() + daysToAdd);
+  newExpiry.setDate(newExpiry.getDate() + totalDaysToAdd);
   
   return newExpiry;
 };
@@ -110,11 +129,21 @@ const addCreditsToUser = async (
     const newExpiryDate = calculateNewExpiry(currentExpiry, daysToAdd);
     const formattedExpiry = newExpiryDate.toISOString().slice(0, 19).replace('T', ' '); // Format: YYYY-MM-DD HH:MM:SS
     
+    // Calculate the actual days to send to RADIUS API
+    // This should be the total days from current date to new expiry
+    const now = new Date();
+    const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const newExpiryDateOnly = new Date(newExpiryDate.getFullYear(), newExpiryDate.getMonth(), newExpiryDate.getDate());
+    
+    const timeDiff = newExpiryDateOnly.getTime() - nowDateOnly.getTime();
+    const totalDaysForRadius = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+    
     console.log(`Calculated new expiry: ${formattedExpiry} (adding ${daysToAdd} days)`);
+    console.log(`Total days to send to RADIUS API: ${totalDaysForRadius}`);
     
     // Build URL with query parameters (same as other RADIUS API calls)
     // For add_credits API: dlbytes=0, ulbytes=0, totalbytes=dataAmount, expiry=days, unit=DAY, onlinetime=0
-    const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=add_credits&username=${encodeURIComponent(username)}&dlbytes=0&ulbytes=0&totalbytes=${trafficToAdd}&expiry=${daysToAdd}&unit=DAY&onlinetime=0`;
+    const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=add_credits&username=${encodeURIComponent(username)}&dlbytes=0&ulbytes=0&totalbytes=${trafficToAdd}&expiry=${totalDaysForRadius}&unit=DAY&onlinetime=0`;
 
     console.log('Adding credits to user:', username);
     console.log('- Days to add:', daysToAdd);

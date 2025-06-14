@@ -981,9 +981,9 @@ const ISPLandingPage: React.FC = () => {
   const [servicePlan, setServicePlan] = useState<ServicePlan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [renewalSuccess, setRenewalSuccess] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [originalUsername, setOriginalUsername] = useState<string>('');
+  const [showAccountUpdated, setShowAccountUpdated] = useState(false);
 
   // Paystack configuration
   const generatePaystackConfig = () => {
@@ -1071,22 +1071,56 @@ const ISPLandingPage: React.FC = () => {
       const renewalResult = await renewalResponse.json();
 
       if (renewalResult.success) {
-        setRenewalSuccess(true);
-        // Update user data with new expiry
-        if (userData) {
-          setUserData({
-            ...userData,
-            expiry: renewalResult.newExpiry
-          });
+        // Instead of showing success message, refresh the account data
+        // so user can see updated expiry date and account status immediately
+        console.log('Renewal successful, refreshing account data...');
+        
+        try {
+          // Fetch fresh user data to show updated information
+          const refreshedUserResult = await getUserData(originalUsername);
+          
+          if (refreshedUserResult.code === 0 && refreshedUserResult.srvid) {
+            // Update user data with fresh information from server
+            setUserData(refreshedUserResult);
+            
+            // Also refresh service plan data if needed
+            const refreshedServiceResult = await getServicePlan(refreshedUserResult.srvid);
+            if (refreshedServiceResult.code === 0) {
+              setServicePlan(refreshedServiceResult);
+            }
+            
+            console.log('Account data refreshed successfully');
+            
+            // Show brief success indicator
+            setShowAccountUpdated(true);
+            setTimeout(() => setShowAccountUpdated(false), 3000);
+            
+          } else {
+            console.error('Failed to refresh user data:', refreshedUserResult.str);
+            // Fall back to using the renewal result data
+            if (userData) {
+              setUserData({
+                ...userData,
+                expiry: renewalResult.newExpiry
+              });
+            }
+          }
+          
+        } catch (refreshError) {
+          console.error('Error refreshing account data:', refreshError);
+          // Fall back to using the renewal result data
+          if (userData) {
+            setUserData({
+              ...userData,
+              expiry: renewalResult.newExpiry
+            });
+          }
         }
         
-        setTimeout(() => {
-          setRenewalSuccess(false);
-          // Reset to initial state after showing success
-          setUserData(null);
-          setServicePlan(null);
-          setOriginalUsername('');
-        }, 5000);
+        // Show brief success indicator for all success cases
+        setShowAccountUpdated(true);
+        setTimeout(() => setShowAccountUpdated(false), 3000);
+        
       } else {
         setError(renewalResult.error || 'Failed to process renewal');
       }
@@ -1158,12 +1192,7 @@ const ISPLandingPage: React.FC = () => {
                 </h1>
                 
                 <div className="mt-12 w-full max-w-6xl">
-                  {renewalSuccess ? (
-                    <div className="rounded-2xl bg-gradient-to-r from-green-600/90 to-emerald-600/90 backdrop-blur-sm p-6 text-white animate-fadeIn shadow-2xl border border-green-500/30 max-w-lg mx-auto">
-                      <p className="font-semibold text-lg text-center">Renewal successful!</p>
-                      <p className="text-green-100 mt-2 text-center">Your subscription has been renewed. Thank you for choosing PHSWEB Internet.</p>
-                    </div>
-                  ) : userData && servicePlan ? (
+                  {userData && servicePlan ? (
                     <div className="space-y-6">
                       <div className="flex justify-between items-center">
                         <h2 className="text-2xl font-bold text-white">Account Information</h2>
@@ -1175,6 +1204,15 @@ const ISPLandingPage: React.FC = () => {
                           Search Another Account
                         </Button>
                       </div>
+                      
+                      {/* Account Updated Success Indicator */}
+                      {showAccountUpdated && (
+                        <div className="rounded-xl bg-gradient-to-r from-green-600/90 to-emerald-600/90 backdrop-blur-sm p-4 text-white animate-fadeIn shadow-xl border border-green-500/30">
+                          <p className="font-semibold text-center">✓ Account Updated Successfully!</p>
+                          <p className="text-green-100 text-sm text-center mt-1">Your subscription has been renewed and account information refreshed.</p>
+                        </div>
+                      )}
+                      
                       <UserDetails 
                         userData={userData} 
                         servicePlan={servicePlan} 
