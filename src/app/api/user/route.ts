@@ -9,18 +9,34 @@ const RADIUS_API_CONFIG = {
 
 export async function POST(request: NextRequest) {
   try {
+    // Log environment check
+    console.log('Environment check:', {
+      NODE_ENV: process.env.NODE_ENV,
+      RADIUS_API_URL: process.env.RADIUS_API_URL ? 'SET' : 'MISSING',
+      RADIUS_API_USER: process.env.RADIUS_API_USER ? 'SET' : 'MISSING',
+      RADIUS_API_PASS: process.env.RADIUS_API_PASS ? 'SET' : 'MISSING'
+    });
+
     const { username } = await request.json();
     
     if (!username) {
+      console.log('Bad request: Username is required');
       return NextResponse.json(
         { error: 'Username is required' },
         { status: 400 }
       );
     }
 
+    console.log('Processing request for username:', username);
+
     // Make API call to RADIUS Manager from server-side
     const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=get_userdata&username=${encodeURIComponent(username)}`;
     
+    console.log('RADIUS API Configuration:', {
+      baseUrl: RADIUS_API_CONFIG.baseUrl,
+      apiuser: RADIUS_API_CONFIG.apiuser,
+      hasApipass: !!RADIUS_API_CONFIG.apipass
+    });
     console.log('Making RADIUS API call to:', url.replace(RADIUS_API_CONFIG.apipass, '***'));
     console.log('Using credentials:', { apiuser: RADIUS_API_CONFIG.apiuser, apipass: '***' });
     
@@ -38,6 +54,10 @@ export async function POST(request: NextRequest) {
     
     const response = await fetch(url, fetchOptions);
     
+    console.log('RADIUS API response status:', response.status);
+    console.log('RADIUS API response ok:', response.ok);
+    console.log('RADIUS API response headers:', Object.fromEntries(response.headers.entries()));
+    
     if (!response.ok) {
       console.error(`RADIUS API HTTP error! status: ${response.status}`);
       console.error('Response headers:', response.headers);
@@ -50,7 +70,8 @@ export async function POST(request: NextRequest) {
         { 
           error: `RADIUS API error: ${response.status}`,
           details: errorText,
-          statusText: response.statusText 
+          statusText: response.statusText,
+          url: url.replace(RADIUS_API_CONFIG.apipass, '***') // Include URL for debugging
         },
         { status: 500 }
       );
