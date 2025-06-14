@@ -413,7 +413,7 @@ export default function HotspotManagementPage() {
               <div className="space-y-4 text-sm">
                 <div>
                   <h4 className="font-medium text-gray-900 mb-2">1. Configure Walled Garden</h4>
-                  <p className="text-gray-600 mb-2">Add your domain to MikroTik's walled garden:</p>
+                  <p className="text-gray-600 mb-2">Add your domain to MikroTik&apos;s walled garden:</p>
                   <code className="bg-gray-100 px-2 py-1 rounded text-xs block">
                     /ip hotspot walled-garden add dst-host=yourdomain.com action=allow
                   </code>
@@ -421,7 +421,7 @@ export default function HotspotManagementPage() {
                 
                 <div>
                   <h4 className="font-medium text-gray-900 mb-2">2. Update login.html</h4>
-                  <p className="text-gray-600 mb-2">Replace the content of your MikroTik's login.html file:</p>
+                  <p className="text-gray-600 mb-2">Replace the content of your MikroTik&apos;s login.html file:</p>
                   <code className="bg-gray-100 px-2 py-1 rounded text-xs block whitespace-pre-wrap">
 {`<!DOCTYPE html>
 <html>
