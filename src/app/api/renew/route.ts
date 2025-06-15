@@ -4,7 +4,8 @@ import {
   createOrUpdateCustomer, 
   createRenewalTransaction,
   calculateCommission,
-  getAccountOwner
+  getAccountOwner,
+  getAccountOwnerByUsername
 } from '@/lib/database';
 
 // Server-side API configuration (same as user API for consistency)
@@ -241,7 +242,7 @@ export async function POST(request: NextRequest) {
 
     // Step 1.5: Get payment amount and handle commission tracking
     let paymentAmount = 0;
-    const servicePlanName = '';
+    let servicePlanName = '';
     let commissionAmount = 0;
     let accountOwnerId: string | undefined = undefined;
     let customerId: string | undefined = undefined;
@@ -261,33 +262,180 @@ export async function POST(request: NextRequest) {
         console.log('Payment amount:', paymentAmount);
       }
 
-      // Look up customer to see if they have an assigned owner
-      const customer = await getCustomerByUsername(username);
+      // Get service plan details to get the actual service plan name
+      try {
+        const serviceUrl = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=get_srv&srvid=${srvid}`;
+        const serviceResponse = await fetch(serviceUrl, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'PHSWEB-NextJS-App/1.0',
+          },
+        });
+
+        if (serviceResponse.ok) {
+          const serviceResult = await serviceResponse.text();
+          const serviceData = JSON.parse(serviceResult);
+          
+          // Parse service plan response: [0, [{"srvid":"78","srvname":"test-unlimited-25K",...}]]
+          if (Array.isArray(serviceData) && serviceData.length >= 2) {
+            const resultCode = serviceData[0];
+            const serviceDataArray = serviceData[1];
+            
+            if (resultCode === 0 && Array.isArray(serviceDataArray) && serviceDataArray.length > 0) {
+              const servicePlan = serviceDataArray[0];
+              servicePlanName = servicePlan.srvname || `Service Plan ${srvid}`;
+              console.log(`Service plan name: ${servicePlanName}`);
+            }
+          }
+        }
+      } catch (serviceError) {
+        console.error('Error fetching service plan details:', serviceError);
+        servicePlanName = `Service Plan ${srvid}`; // Fallback
+      }
+
+      // Get user data from RADIUS API to extract owner information
+      let radiusOwner = '';
+      let customerData: {
+        first_name?: string;
+        last_name?: string;
+        email?: string;
+        phone?: string;
+        address?: string;
+        city?: string;
+        state?: string;
+        country?: string;
+      } = {};
+      
+      try {
+        const radiusUrl = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=get_userdata&username=${encodeURIComponent(username)}`;
+        const radiusResponse = await fetch(radiusUrl, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'PHSWEB-NextJS-App/1.0',
+          },
+        });
+
+        if (radiusResponse.ok) {
+          const radiusResult = await radiusResponse.text();
+          const radiusData = JSON.parse(radiusResult);
+          
+          // Parse RADIUS response (same format as in user API)
+          if (typeof radiusData === 'object' && radiusData !== null) {
+            const resultCode = radiusData["0"];
+            const userData = radiusData["1"];
+            
+            if (resultCode === 0 && userData) {
+              radiusOwner = userData.owner || '';
+              customerData = {
+                first_name: userData.firstname || '',
+                last_name: userData.lastname || '',
+                email: userData.email || '',
+                phone: userData.phone || userData.mobile || '',
+                address: userData.address || '',
+                city: userData.city || '',
+                state: userData.state || '',
+                country: userData.country || '',
+              };
+              
+              console.log(`Customer ${username} has owner: ${radiusOwner}`);
+            }
+          }
+        }
+      } catch (radiusError) {
+        console.error('Error fetching RADIUS user data:', radiusError);
+        // Continue without owner assignment if RADIUS fails
+      }
+
+      // Look up or create customer record with owner assignment
+      let customer = await getCustomerByUsername(username);
       
       if (customer) {
+        // Update existing customer with latest data from RADIUS
+        const updateData: {
+          username: string;
+          last_renewal_date: string;
+          first_name?: string;
+          last_name?: string;
+          email?: string;
+          phone?: string;
+          address?: string;
+          city?: string;
+          state?: string;
+          country?: string;
+          account_owner_id?: string;
+        } = {
+          ...customerData,
+          username: username,
+          last_renewal_date: new Date().toISOString(),
+        };
+        
+        // If customer doesn't have an owner but RADIUS has one, assign it
+        if (!customer.account_owner_id && radiusOwner) {
+          const owner = await getAccountOwnerByUsername(radiusOwner);
+          if (owner) {
+            updateData.account_owner_id = owner.id;
+            console.log(`Assigning customer ${username} to owner ${owner.name} (${radiusOwner})`);
+          }
+        }
+        
+        const updatedCustomer = await createOrUpdateCustomer(updateData);
+        if (updatedCustomer) {
+          customer = updatedCustomer;
+        }
+        
         customerId = customer.id;
         accountOwnerId = customer.account_owner_id || undefined;
-        
-        if (accountOwnerId && paymentAmount > 0) {
-          // Get owner details to get commission rate
-          const owner = await getAccountOwner(accountOwnerId);
-          if (owner) {
-            commissionAmount = calculateCommission(paymentAmount, owner.commission_rate);
-            console.log(`Commission calculated: ${commissionAmount} (${owner.commission_rate}% of ${paymentAmount}) for owner: ${owner.name}`);
-          }
-        } else {
-          console.log('Customer has no assigned owner - no commission will be tracked');
-        }
       } else {
-        console.log('Customer not found in database - creating basic record');
-        // Create basic customer record for future assignment
-        const newCustomer = await createOrUpdateCustomer({
+        // Create new customer record
+        console.log('Customer not found in database - creating new record');
+        
+        const newCustomerData: {
+          username: string;
+          last_renewal_date: string;
+          first_name?: string;
+          last_name?: string;
+          email?: string;
+          phone?: string;
+          address?: string;
+          city?: string;
+          state?: string;
+          country?: string;
+          account_owner_id?: string;
+        } = {
           username: username,
-        });
+          ...customerData,
+          last_renewal_date: new Date().toISOString(),
+        };
+        
+        // Assign owner if found in RADIUS
+        if (radiusOwner) {
+          const owner = await getAccountOwnerByUsername(radiusOwner);
+          if (owner) {
+            newCustomerData.account_owner_id = owner.id;
+            console.log(`Creating customer ${username} with owner ${owner.name} (${radiusOwner})`);
+          } else {
+            console.log(`Warning: Owner '${radiusOwner}' from RADIUS not found in database`);
+          }
+        }
+        
+        const newCustomer = await createOrUpdateCustomer(newCustomerData);
         if (newCustomer) {
           customerId = newCustomer.id;
+          accountOwnerId = newCustomer.account_owner_id || undefined;
         }
       }
+
+      // Calculate commission if owner is assigned
+      if (accountOwnerId && paymentAmount > 0) {
+        const owner = await getAccountOwner(accountOwnerId);
+        if (owner) {
+          commissionAmount = calculateCommission(paymentAmount, owner.commission_rate);
+          console.log(`Commission calculated: ${commissionAmount} (${owner.commission_rate}% of ${paymentAmount}) for owner: ${owner.name}`);
+        }
+      } else if (!accountOwnerId) {
+        console.log('No owner assigned to customer - no commission will be tracked');
+      }
+      
     } catch (error) {
       console.error('Error in commission tracking setup:', error);
       // Continue with renewal even if commission tracking fails
