@@ -90,13 +90,27 @@ export async function calculateKPIMetrics(startDate?: string, endDate?: string):
     
     const mrr = totalRevenue * (30 / avgRenewalPeriod)
 
-    // 3. Customer Lifetime Value (LTV) estimate
-    // LTV = (Average Order Value × Purchase Frequency × Gross Margin × Lifespan)
-    const avgOrderValue = totalTransactions > 0 ? totalRevenue / totalTransactions : 0
-    const purchaseFrequency = 365 / avgRenewalPeriod // Purchases per year
-    const grossMargin = 0.7 // Assume 70% gross margin
-    const estimatedLifespan = 2 // Assume 2 years average customer lifespan
-    const ltv = avgOrderValue * purchaseFrequency * grossMargin * estimatedLifespan
+    // 3. Customer Lifetime Value (LTV) estimate - More conservative approach
+    // For early stage with limited data, use a more conservative calculation
+    let ltv = 0
+    if (uniqueCustomers > 0 && totalTransactions > 0) {
+      // More conservative assumptions for early stage
+      const grossMargin = 0.6 // More conservative 60% gross margin
+      
+      // Dynamic lifespan based on data maturity
+      let estimatedLifespan = 1 // Start with 1 year for new businesses
+      if (totalTransactions > 10) estimatedLifespan = 1.5
+      if (totalTransactions > 50) estimatedLifespan = 2
+      if (totalTransactions > 100) estimatedLifespan = 2.5
+      
+      // LTV = ARPU × 12 months × gross margin × estimated years
+      ltv = arpu * 12 * grossMargin * estimatedLifespan
+      
+      // Cap LTV to reasonable maximum (10x ARPU for very early stage)
+      if (totalTransactions < 5) {
+        ltv = Math.min(ltv, arpu * 10)
+      }
+    }
 
     // 4. Revenue Growth Rate
     const revenueGrowthRate = previousRevenue > 0 

@@ -7,11 +7,23 @@ interface TrendData {
   revenue: number
   commissions: number
   transactions: number
+  customers: number
 }
 
 interface CommissionTrendChartProps {
   data: TrendData[]
   height?: number
+}
+
+interface TooltipProps {
+  active?: boolean
+  payload?: Array<{
+    color: string
+    name: string
+    value: number
+    dataKey: string
+  }>
+  label?: string
 }
 
 export default function CommissionTrendChart({ data, height = 300 }: CommissionTrendChartProps) {
@@ -24,19 +36,18 @@ export default function CommissionTrendChart({ data, height = 300 }: CommissionT
     }).format(value)
   }
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 shadow-lg">
           <p className="text-gray-300 text-sm font-medium">{label}</p>
-          {payload.map((entry: any, index: number) => (
+          {payload.map((entry, index: number) => (
             <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {formatCurrency(entry.value)}
+              {entry.name}: {entry.dataKey === 'customers' || entry.dataKey === 'transactions' 
+                ? entry.value 
+                : formatCurrency(entry.value)}
             </p>
           ))}
-          <p className="text-gray-400 text-xs mt-1">
-            Transactions: {payload[0]?.payload?.transactions || 0}
-          </p>
         </div>
       )
     }
@@ -65,15 +76,23 @@ export default function CommissionTrendChart({ data, height = 300 }: CommissionT
             height={60}
           />
           <YAxis 
+            yAxisId="left"
             stroke="#9CA3AF" 
             fontSize={12}
             tickFormatter={formatCurrency}
+          />
+          <YAxis 
+            yAxisId="right"
+            orientation="right"
+            stroke="#9CA3AF" 
+            fontSize={12}
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend 
             wrapperStyle={{ color: '#D1D5DB' }}
           />
           <Line
+            yAxisId="left"
             type="monotone"
             dataKey="revenue"
             stroke="#3B82F6"
@@ -83,6 +102,7 @@ export default function CommissionTrendChart({ data, height = 300 }: CommissionT
             activeDot={{ r: 6, stroke: '#3B82F6', strokeWidth: 2 }}
           />
           <Line
+            yAxisId="left"
             type="monotone"
             dataKey="commissions"
             stroke="#10B981"
@@ -90,6 +110,17 @@ export default function CommissionTrendChart({ data, height = 300 }: CommissionT
             name="Commissions"
             dot={{ fill: '#10B981', strokeWidth: 2, r: 4 }}
             activeDot={{ r: 6, stroke: '#10B981', strokeWidth: 2 }}
+          />
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="customers"
+            stroke="#F59E0B"
+            strokeWidth={2}
+            strokeDasharray="5 5"
+            name="Customers"
+            dot={{ fill: '#F59E0B', strokeWidth: 2, r: 3 }}
+            activeDot={{ r: 5, stroke: '#F59E0B', strokeWidth: 2 }}
           />
         </LineChart>
       </ResponsiveContainer>

@@ -22,16 +22,7 @@ interface MonthlyTrendItem {
   revenue: number
   commissions: number
   transactions: number
-}
-
-interface TransactionData {
-  account_owner_id: string
-  commission_amount: number
-  amount_paid: number
-  account_owners: {
-    name: string
-    email: string
-  }[]
+  customers: number
 }
 
 interface PlanData {
@@ -72,14 +63,15 @@ export async function GET(request: NextRequest) {
     const totalCommissions = transactions?.reduce((sum, t) => sum + t.commission_amount, 0) || 0
     const totalTransactions = transactions?.length || 0
 
-    // 2. Owner Leaderboard
+    // 2. Owner Leaderboard - Don't apply date filter to owner queries
     const { data: ownerStats, error: ownerError } = await supabaseAdmin
       .from('renewal_transactions')
       .select(`
         account_owner_id,
         commission_amount,
         amount_paid,
-        account_owners!inner(name, email)
+        created_at,
+        account_owners!left(name, email, is_active)
       `)
       .eq('payment_status', 'success')
       .not('account_owner_id', 'is', null)
@@ -89,16 +81,41 @@ export async function GET(request: NextRequest) {
       throw ownerError
     }
 
+    console.log('Owner stats raw data:', ownerStats?.slice(0, 2)) // Debug first 2 records
+
     // Group by owner and calculate totals
     const ownerMap: Record<string, OwnerLeaderboardItem> = {}
-    ownerStats?.forEach((transaction: TransactionData) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ownerStats?.forEach((transaction: any) => {
       const ownerId = transaction.account_owner_id
-      const ownerInfo = transaction.account_owners[0] // Get first owner from array
+      const ownerInfo = transaction.account_owners // This is an object with LEFT JOIN
+      
+      console.log('Processing transaction:', { 
+        ownerId, 
+        ownerInfo, 
+        hasOwner: !!ownerInfo,
+        isActive: ownerInfo?.is_active 
+      })
+      
+      // Skip if no owner info is available OR owner is inactive
+      if (!ownerInfo || !ownerId || !ownerInfo.is_active) {
+        console.warn('Skipping transaction with missing/inactive owner:', { 
+          ownerId, 
+          hasOwnerInfo: !!ownerInfo,
+          isActive: ownerInfo?.is_active 
+        })
+        return
+      }
+      
+      // Apply date filter here instead of in the query
+      if (startDate && transaction.created_at < startDate) return
+      if (endDate && transaction.created_at > endDate) return
+      
       if (!ownerMap[ownerId]) {
         ownerMap[ownerId] = {
           id: ownerId,
-          name: ownerInfo.name,
-          email: ownerInfo.email,
+          name: ownerInfo.name || 'Unknown Owner',
+          email: ownerInfo.email || 'No email',
           totalCommissions: 0,
           totalRevenue: 0,
           transactionCount: 0
@@ -111,6 +128,8 @@ export async function GET(request: NextRequest) {
 
     const ownerLeaderboard = Object.values(ownerMap)
       .sort((a, b) => b.totalCommissions - a.totalCommissions)
+
+    console.log('Final owner leaderboard:', ownerLeaderboard)
 
     // 3. Monthly Trends (last 12 months)
     const monthlyTrends: MonthlyTrendItem[] = []
@@ -125,19 +144,21 @@ export async function GET(request: NextRequest) {
       
       const { data: monthData } = await supabaseAdmin
         .from('renewal_transactions')
-        .select('amount_paid, commission_amount')
+        .select('amount_paid, commission_amount, username')
         .eq('payment_status', 'success')
         .gte('created_at', date.toISOString())
         .lt('created_at', nextMonth.toISOString())
 
       const monthRevenue = monthData?.reduce((sum, t) => sum + t.amount_paid, 0) || 0
       const monthCommissions = monthData?.reduce((sum, t) => sum + t.commission_amount, 0) || 0
+      const uniqueCustomers = new Set(monthData?.map(t => t.username)).size
 
       monthlyTrends.push({
         month: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
         revenue: monthRevenue,
         commissions: monthCommissions,
-        transactions: monthData?.length || 0
+        transactions: monthData?.length || 0,
+        customers: uniqueCustomers
       })
     }
 
@@ -200,15 +221,33 @@ export async function GET(request: NextRequest) {
         amount_paid,
         commission_amount,
         created_at,
-        account_owners(name)
+        account_owners!left(name, is_active)
       `)
       .eq('payment_status', 'success')
+      .not('account_owner_id', 'is', null)
       .order('created_at', { ascending: false })
       .limit(10)
 
     if (activityError) {
       console.error('Error fetching recent activity:', activityError)
     }
+
+    console.log('Recent activity raw data:', recentActivity?.slice(0, 2)) // Debug first 2 records
+
+    // Filter out transactions with inactive owners
+    const filteredRecentActivity = recentActivity?.filter(activity => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const owner = activity.account_owners as any // This should be an object, not array
+      console.log('Filtering recent activity:', { 
+        activityId: activity.id, 
+        owner, 
+        hasOwner: !!owner,
+        isActive: owner?.is_active 
+      })
+      return owner && owner.is_active
+    }) || []
+
+    console.log('Filtered recent activity:', filteredRecentActivity?.slice(0, 2))
 
     return NextResponse.json({
       success: true,
@@ -227,7 +266,7 @@ export async function GET(request: NextRequest) {
         ownerLeaderboard: ownerLeaderboard.slice(0, 10), // Top 10 owners
         monthlyTrends,
         servicePlanPerformance: servicePlanPerformance.slice(0, 5), // Top 5 plans
-        recentActivity: recentActivity || []
+        recentActivity: filteredRecentActivity
       }
     })
 

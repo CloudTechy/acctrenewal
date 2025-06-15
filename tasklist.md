@@ -257,6 +257,16 @@ Some have incomplete name data
 4. **✅ KPI API Endpoint**: `/api/kpi` serving advanced business intelligence
 5. **✅ Enhanced Admin Dashboard**: Complete visual overhaul with charts and KPIs
 
+#### **🔧 Recent Bug Fixes Applied:**
+1. **✅ Owner Dashboard Commission History**: Fixed date range filtering to show recent transactions
+   - Extended default range from 30 to 90 days
+   - Fixed end date to include full day (23:59:59)
+   - Improved timezone handling in database queries
+2. **✅ Admin Dashboard Recent Activity**: Fixed missing owner names
+   - Changed from LEFT JOIN to INNER JOIN (`account_owners!inner(name)`)
+   - Added filter to exclude transactions without owners
+   - Ensured owner names display properly in recent activity
+
 #### **New Business Intelligence Features:**
 - 📊 **Advanced KPI Metrics**: ARPU, LTV, MRR, churn rate, retention rate
 - 📈 **Visual Charts**: Interactive line, bar, and pie charts with tooltips
@@ -272,6 +282,7 @@ Some have incomplete name data
 - **Interactive Tooltips**: Rich hover information on all charts
 - **Export Capabilities**: CSV downloads for all major data sets
 - **Performance Optimized**: Efficient database queries for large datasets
+- **Bug-Free Operation**: Robust error handling and data validation
 
 ---
 

@@ -53,6 +53,7 @@ interface MonthlyTrendItem {
   revenue: number
   commissions: number
   transactions: number
+  customers: number
 }
 
 interface ServicePlanItem {
@@ -68,7 +69,7 @@ interface RecentActivityItem {
   amount_paid: number
   commission_amount: number
   created_at: string
-  account_owners: { name: string }[]
+  account_owners: { name: string; is_active: boolean } | null
 }
 
 interface AnalyticsData {
@@ -279,21 +280,23 @@ export default function AdminDashboard() {
 
         {/* KPI Metrics Row */}
         {kpiData && !kpiLoading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
             >
-              <Card className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white">
-                <CardContent className="p-4">
+              <Card className="bg-gray-800/60 border-gray-700 hover:bg-gray-800/80 transition-all">
+                <CardContent className="p-3">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-indigo-100 text-xs">ARPU</p>
-                      <p className="text-lg font-bold">{formatCurrency(kpiData.kpi.arpu)}</p>
-                      <p className="text-indigo-100 text-xs">Avg Revenue/User</p>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Target className="h-4 w-4 text-blue-400" />
+                        <p className="text-gray-300 text-sm font-medium">ARPU</p>
+                      </div>
+                      <p className="text-white text-xl font-bold">{formatCurrency(kpiData.kpi.arpu)}</p>
+                      <p className="text-gray-400 text-sm">Avg Revenue/User</p>
                     </div>
-                    <Target className="h-6 w-6 text-indigo-200" />
                   </div>
                 </CardContent>
               </Card>
@@ -304,15 +307,17 @@ export default function AdminDashboard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
-              <Card className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white">
-                <CardContent className="p-4">
+              <Card className="bg-gray-800/60 border-gray-700 hover:bg-gray-800/80 transition-all">
+                <CardContent className="p-3">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-emerald-100 text-xs">LTV</p>
-                      <p className="text-lg font-bold">{formatCurrency(kpiData.kpi.ltv)}</p>
-                      <p className="text-emerald-100 text-xs">Lifetime Value</p>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Award className="h-4 w-4 text-green-400" />
+                        <p className="text-gray-300 text-sm font-medium">LTV</p>
+                      </div>
+                      <p className="text-white text-xl font-bold">{formatCurrency(kpiData.kpi.ltv)}</p>
+                      <p className="text-gray-400 text-sm">Lifetime Value</p>
                     </div>
-                    <Award className="h-6 w-6 text-emerald-200" />
                   </div>
                 </CardContent>
               </Card>
@@ -323,15 +328,17 @@ export default function AdminDashboard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
-              <Card className="bg-gradient-to-r from-violet-500 to-violet-600 text-white">
-                <CardContent className="p-4">
+              <Card className="bg-gray-800/60 border-gray-700 hover:bg-gray-800/80 transition-all">
+                <CardContent className="p-3">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-violet-100 text-xs">MRR</p>
-                      <p className="text-lg font-bold">{formatCurrency(kpiData.kpi.mrr)}</p>
-                      <p className="text-violet-100 text-xs">Monthly Recurring</p>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <TrendingUp className="h-4 w-4 text-purple-400" />
+                        <p className="text-gray-300 text-sm font-medium">MRR</p>
+                      </div>
+                      <p className="text-white text-xl font-bold">{formatCurrency(kpiData.kpi.mrr)}</p>
+                      <p className="text-gray-400 text-sm">Monthly Recurring</p>
                     </div>
-                    <TrendingUp className="h-6 w-6 text-violet-200" />
                   </div>
                 </CardContent>
               </Card>
@@ -342,18 +349,20 @@ export default function AdminDashboard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
             >
-              <Card className="bg-gradient-to-r from-amber-500 to-amber-600 text-white">
-                <CardContent className="p-4">
+              <Card className="bg-gray-800/60 border-gray-700 hover:bg-gray-800/80 transition-all">
+                <CardContent className="p-3">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-amber-100 text-xs">Retention</p>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Users className="h-4 w-4 text-orange-400" />
+                        <p className="text-gray-300 text-sm font-medium">Retention</p>
+                      </div>
                       <div className="flex items-center gap-1">
-                        <p className="text-lg font-bold">{formatPercent(kpiData.kpi.retentionRate)}</p>
+                        <p className="text-white text-xl font-bold">{formatPercent(kpiData.kpi.retentionRate)}</p>
                         {getTrendIcon(kpiData.kpi.revenueGrowthRate)}
                       </div>
-                      <p className="text-amber-100 text-xs">Customer Retention</p>
+                      <p className="text-gray-400 text-sm">Customer Retention</p>
                     </div>
-                    <Users className="h-6 w-6 text-amber-200" />
                   </div>
                 </CardContent>
               </Card>
@@ -364,18 +373,20 @@ export default function AdminDashboard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
             >
-              <Card className="bg-gradient-to-r from-rose-500 to-rose-600 text-white">
-                <CardContent className="p-4">
+              <Card className="bg-gray-800/60 border-gray-700 hover:bg-gray-800/80 transition-all">
+                <CardContent className="p-3">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-rose-100 text-xs">Growth</p>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <BarChart3 className="h-4 w-4 text-cyan-400" />
+                        <p className="text-gray-300 text-sm font-medium">Growth</p>
+                      </div>
                       <div className="flex items-center gap-1">
-                        <p className="text-lg font-bold">{formatPercent(kpiData.kpi.revenueGrowthRate)}</p>
+                        <p className="text-white text-xl font-bold">{formatPercent(kpiData.kpi.revenueGrowthRate)}</p>
                         {getTrendIcon(kpiData.kpi.revenueGrowthRate)}
                       </div>
-                      <p className="text-rose-100 text-xs">Revenue Growth</p>
+                      <p className="text-gray-400 text-sm">Revenue Growth</p>
                     </div>
-                    <BarChart3 className="h-6 w-6 text-rose-200" />
                   </div>
                 </CardContent>
               </Card>
@@ -384,24 +395,22 @@ export default function AdminDashboard() {
         )}
 
         {/* Overview Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-green-100 text-sm">Total Revenue</p>
-                    <p className="text-2xl font-bold">{formatCurrency(data.overview.totalRevenue)}</p>
-                    <p className="text-green-100 text-xs">
-                      Avg: {formatCurrency(data.overview.averageTransactionValue)}
-                    </p>
-                  </div>
-                  <DollarSign className="h-8 w-8 text-green-200" />
+            <Card className="bg-gray-800/60 border-gray-700 hover:bg-gray-800/80 transition-all">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <DollarSign className="h-4 w-4 text-green-400" />
+                  <p className="text-gray-300 text-sm font-medium">Total Revenue</p>
                 </div>
+                <p className="text-white text-xl font-bold mb-1">{formatCurrency(data.overview.totalRevenue)}</p>
+                <p className="text-gray-400 text-xs">
+                  Avg: {formatCurrency(data.overview.averageTransactionValue)}
+                </p>
               </CardContent>
             </Card>
           </motion.div>
@@ -411,18 +420,16 @@ export default function AdminDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-blue-100 text-sm">Total Commissions</p>
-                    <p className="text-2xl font-bold">{formatCurrency(data.overview.totalCommissions)}</p>
-                    <p className="text-blue-100 text-xs">
-                      Rate: {formatPercent(data.overview.commissionRate)}
-                    </p>
-                  </div>
-                  <Wallet className="h-8 w-8 text-blue-200" />
+            <Card className="bg-gray-800/60 border-gray-700 hover:bg-gray-800/80 transition-all">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Wallet className="h-4 w-4 text-blue-400" />
+                  <p className="text-gray-300 text-sm font-medium">Total Commissions</p>
                 </div>
+                <p className="text-white text-xl font-bold mb-1">{formatCurrency(data.overview.totalCommissions)}</p>
+                <p className="text-gray-400 text-xs">
+                  Rate: {formatPercent(data.overview.commissionRate)}
+                </p>
               </CardContent>
             </Card>
           </motion.div>
@@ -432,18 +439,16 @@ export default function AdminDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-purple-100 text-sm">Total Customers</p>
-                    <p className="text-2xl font-bold">{data.overview.totalCustomers}</p>
-                    <p className="text-purple-100 text-xs">
-                      Assigned: {formatPercent(data.overview.assignmentRate)}
-                    </p>
-                  </div>
-                  <Users className="h-8 w-8 text-purple-200" />
+            <Card className="bg-gray-800/60 border-gray-700 hover:bg-gray-800/80 transition-all">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Users className="h-4 w-4 text-purple-400" />
+                  <p className="text-gray-300 text-sm font-medium">Total Customers</p>
                 </div>
+                <p className="text-white text-xl font-bold mb-1">{data.overview.totalCustomers}</p>
+                <p className="text-gray-400 text-xs">
+                  Assigned: {formatPercent(data.overview.assignmentRate)}
+                </p>
               </CardContent>
             </Card>
           </motion.div>
@@ -453,18 +458,16 @@ export default function AdminDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
-            <Card className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-orange-100 text-sm">Active Owners</p>
-                    <p className="text-2xl font-bold">{data.overview.activeOwners}</p>
-                    <p className="text-orange-100 text-xs">
-                      Transactions: {data.overview.totalTransactions}
-                    </p>
-                  </div>
-                  <Building2 className="h-8 w-8 text-orange-200" />
+            <Card className="bg-gray-800/60 border-gray-700 hover:bg-gray-800/80 transition-all">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Building2 className="h-4 w-4 text-orange-400" />
+                  <p className="text-gray-300 text-sm font-medium">Active Owners</p>
                 </div>
+                <p className="text-white text-xl font-bold mb-1">{data.overview.activeOwners}</p>
+                <p className="text-gray-400 text-xs">
+                  Transactions: {data.overview.totalTransactions}
+                </p>
               </CardContent>
             </Card>
           </motion.div>
@@ -551,7 +554,7 @@ export default function AdminDashboard() {
                         <p className="font-medium text-white text-sm">{activity.username}</p>
                         <p className="text-xs text-gray-400">{formatDate(activity.created_at)}</p>
                         <p className="text-xs text-gray-400">
-                          Owner: {activity.account_owners?.[0]?.name || 'No owner'}
+                          Owner: {activity.account_owners?.name || 'No owner'}
                         </p>
                       </div>
                       <div className="text-right">
