@@ -230,8 +230,8 @@ export default function AdminDashboard() {
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Advanced Analytics Dashboard</h1>
-          <p className="text-gray-400">Enterprise-grade business intelligence and KPI tracking</p>
+          <h1 className="text-4xl font-bold text-white mb-2">Analytics Dashboard</h1>
+          <p className="text-gray-400">Business intelligence and KPI tracking</p>
         </div>
 
         {/* Date Filter */}

@@ -155,7 +155,7 @@ export default function OwnerDashboard() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">Commission Dashboard</h1>
-          <p className="text-gray-400">Track your earnings and customer renewals</p>
+          <p className="text-gray-400">Earnings and customer renewals</p>
         </div>
 
         {/* Owner Selection */}
