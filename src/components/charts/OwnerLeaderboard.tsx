@@ -17,6 +17,18 @@ interface OwnerLeaderboardProps {
   maxOwners?: number
 }
 
+interface TooltipProps {
+  active?: boolean
+  payload?: Array<{
+    payload?: {
+      fullName?: string
+      commissions?: number
+      revenue?: number
+      transactions?: number
+    }
+  }>
+}
+
 export default function OwnerLeaderboard({ data, height = 400, maxOwners = 10 }: OwnerLeaderboardProps) {
   const chartData = data.slice(0, maxOwners).map(owner => ({
     name: owner.name.length > 15 ? `${owner.name.substring(0, 15)}...` : owner.name,
@@ -35,7 +47,7 @@ export default function OwnerLeaderboard({ data, height = 400, maxOwners = 10 }:
     }).format(value)
   }
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload }: TooltipProps) => {
     if (active && payload && payload.length) {
       const data = payload[0]?.payload
       return (

@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createRenewalTransaction, getCustomerByUsername, createOrUpdateCustomer, getAccountOwnerByUsername } from '@/lib/database';
+import { supabaseAdmin } from '@/lib/supabase';
+
+// RADIUS API Configuration
+const RADIUS_API_CONFIG = {
+  baseUrl: process.env.RADIUS_API_URL || 'https://portal1.phsweb.ng/api/sysapi.php',
+  apiuser: process.env.RADIUS_API_USER || 'phsweb',
+  apipass: process.env.RADIUS_API_PASS || '',
+};
 
 // Paystack webhook event types
 interface PaystackWebhookEvent {
@@ -61,13 +69,6 @@ interface PaystackWebhookEvent {
   };
 }
 
-// RADIUS Manager configuration
-const RADIUS_API_CONFIG = {
-  baseUrl: process.env.RADIUS_API_URL || 'http://161.35.46.125/radiusmanager/api/sysapi.php',
-  apiuser: process.env.RADIUS_API_USER || 'api',
-  apipass: process.env.RADIUS_API_PASS || 'api123'
-};
-
 // Verify Paystack webhook signature
 function verifyPaystackSignature(payload: string, signature: string): boolean {
   const secret = process.env.PAYSTACK_SECRET_KEY;
@@ -84,9 +85,38 @@ function verifyPaystackSignature(payload: string, signature: string): boolean {
 async function addCreditsToUser(
   username: string,
   daysToAdd: number,
-  trafficToAdd: number = 0
+  trafficToAdd: number = 0,
+  currentExpiry?: string
 ): Promise<{ success: boolean; newExpiry?: string }> {
   try {
+    // Calculate proper expiry date based on current expiry (same logic as main API)
+    let calculatedExpiry: Date;
+    
+    if (currentExpiry) {
+      const current = new Date(currentExpiry);
+      const now = new Date();
+      
+      // If current expiry is in the future, add to it
+      if (current > now) {
+        calculatedExpiry = new Date(current);
+        calculatedExpiry.setDate(calculatedExpiry.getDate() + daysToAdd);
+        console.log(`Current expiry ${currentExpiry} is in future, adding ${daysToAdd} days to it`);
+      } else {
+        // If expired, start from now
+        calculatedExpiry = new Date();
+        calculatedExpiry.setDate(calculatedExpiry.getDate() + daysToAdd);
+        console.log(`Current expiry ${currentExpiry} is in past, adding ${daysToAdd} days from now`);
+      }
+    } else {
+      // No current expiry provided, start from now
+      calculatedExpiry = new Date();
+      calculatedExpiry.setDate(calculatedExpiry.getDate() + daysToAdd);
+      console.log(`No current expiry provided, adding ${daysToAdd} days from now`);
+    }
+
+    const formattedExpiry = calculatedExpiry.toISOString().slice(0, 19).replace('T', ' ');
+    console.log(`Calculated new expiry: ${formattedExpiry} (adding ${daysToAdd} days)`);
+
     const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=add_credits&username=${encodeURIComponent(username)}&dlbytes=0&ulbytes=0&totalbytes=${trafficToAdd}&expiry=${daysToAdd}&unit=DAY&onlinetime=0`;
 
     console.log('Adding credits to user via webhook:', username);
@@ -117,13 +147,10 @@ async function addCreditsToUser(
         if (resultCode === 0) {
           console.log('Credits added successfully via webhook');
           
-          // Calculate new expiry date
-          const newExpiry = new Date();
-          newExpiry.setDate(newExpiry.getDate() + daysToAdd);
-          
+          // Return the calculated expiry (more reliable than API response)
           return { 
             success: true, 
-            newExpiry: newExpiry.toISOString()
+            newExpiry: formattedExpiry
           };
         } else {
           console.error('RADIUS add_credits failed with code:', resultCode, resultData);
@@ -232,9 +259,70 @@ export async function POST(request: NextRequest) {
       }
 
       try {
+        // Get current user data to determine existing expiry
+        let currentExpiry: string | undefined;
+        
+        try {
+          const userUrl = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=get_userdata&username=${encodeURIComponent(username)}`;
+          const userResponse = await fetch(userUrl, {
+            method: 'GET',
+            headers: {
+              'User-Agent': 'PHSWEB-NextJS-App/1.0',
+            },
+          });
+
+          if (userResponse.ok) {
+            const userResult = await userResponse.text();
+            const userData = JSON.parse(userResult);
+            
+            // Parse RADIUS response to get current expiry
+            if (typeof userData === 'object' && userData !== null) {
+              const resultCode = userData["0"];
+              if (resultCode === 0 && userData.expiry) {
+                currentExpiry = userData.expiry;
+                console.log('Current user expiry from RADIUS:', currentExpiry);
+              }
+            }
+          }
+        } catch (userError) {
+          console.error('Error fetching user data for expiry:', userError);
+          // Continue without current expiry - will default to adding from now
+        }
+
+        // Create a preliminary transaction record to prevent race conditions
+        // This will fail if the main API already created one
+        try {
+          const paymentAmount = event.data.amount / 100; // Convert from kobo to naira
+          
+          const preliminaryTransaction = {
+            username: username,
+            service_plan_id: parseInt(srvid) || 0,
+            service_plan_name: `Service Plan ${srvid}`,
+            amount_paid: paymentAmount,
+            commission_rate: 0, // Will be updated later
+            commission_amount: 0, // Will be updated later
+            paystack_reference: event.data.reference,
+            payment_status: 'processing', // Mark as processing initially
+            renewal_period_days: timeunitexp,
+            renewal_start_date: new Date().toISOString(),
+            renewal_end_date: new Date(Date.now() + timeunitexp * 24 * 60 * 60 * 1000).toISOString(),
+            customer_location: '',
+          };
+
+          const preliminaryRecord = await createRenewalTransaction(preliminaryTransaction);
+          if (!preliminaryRecord) {
+            console.log('Failed to create preliminary transaction record - likely already processed');
+            return NextResponse.json({ message: 'Already processed' }, { status: 200 });
+          }
+          console.log('Created preliminary transaction record:', preliminaryRecord.id);
+        } catch (transactionError) {
+          console.log('Transaction already exists (race condition prevented):', transactionError);
+          return NextResponse.json({ message: 'Already processed' }, { status: 200 });
+        }
+
         // Add credits to user account
         const trafficToAdd = limitcomb === 0 ? 0 : trafficunitcomb * 1048576; // Convert MB to bytes
-        const creditsResult = await addCreditsToUser(username, timeunitexp, trafficToAdd);
+        const creditsResult = await addCreditsToUser(username, timeunitexp, trafficToAdd, currentExpiry);
 
         if (!creditsResult.success) {
           console.error('Failed to add credits for:', username);
@@ -271,12 +359,23 @@ export async function POST(request: NextRequest) {
 // Check if transaction already exists (for idempotency)
 async function checkExistingTransaction(reference: string): Promise<boolean> {
   try {
-    // This is a simplified check - you should implement this in your database layer
-    // For now, we'll assume the createRenewalTransaction function handles duplicates
-    console.log('Checking existing transaction for reference:', reference);
+    // Check if transaction already exists in database
+    const { data: existingTransactions } = await supabaseAdmin
+      .from('renewal_transactions')
+      .select('id, paystack_reference')
+      .eq('paystack_reference', reference)
+      .limit(1);
+
+    if (existingTransactions && existingTransactions.length > 0) {
+      console.log('Transaction already exists in database:', reference);
+      return true;
+    }
+
+    console.log('No existing transaction found for reference:', reference);
     return false;
   } catch (error) {
     console.error('Error checking existing transaction:', error);
+    // If we can't check, assume it doesn't exist to avoid blocking legitimate payments
     return false;
   }
 }
@@ -287,45 +386,210 @@ async function recordTransaction(event: PaystackWebhookEvent, newExpiry?: string
     const { username, srvid, timeunitexp } = extractPaymentMetadata(event);
     const paymentAmount = event.data.amount / 100; // Convert from kobo to naira
 
-    // Get or create customer
-    let customer = await getCustomerByUsername(username);
-    if (!customer) {
-      customer = await createOrUpdateCustomer({
-        username: username,
-        email: event.data.customer.email,
-        first_name: event.data.customer.first_name || '',
-        last_name: event.data.customer.last_name || '',
-        phone: event.data.customer.phone || ''
+    // Get service plan details to get the actual service plan name
+    let servicePlanName = `Service Plan ${srvid}`;
+    try {
+      const serviceUrl = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=get_srv&srvid=${srvid}`;
+      const serviceResponse = await fetch(serviceUrl, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'PHSWEB-NextJS-App/1.0',
+        },
       });
+
+      if (serviceResponse.ok) {
+        const serviceResult = await serviceResponse.text();
+        const serviceData = JSON.parse(serviceResult);
+        
+        // Parse service plan response: [0, [{"srvid":"78","srvname":"test-unlimited-25K",...}]]
+        if (Array.isArray(serviceData) && serviceData.length >= 2) {
+          const resultCode = serviceData[0];
+          const serviceDataArray = serviceData[1];
+          
+          if (resultCode === 0 && Array.isArray(serviceDataArray) && serviceDataArray.length > 0) {
+            const servicePlan = serviceDataArray[0];
+            servicePlanName = servicePlan.srvname || `Service Plan ${srvid}`;
+            console.log(`Service plan name: ${servicePlanName}`);
+          }
+        }
+      }
+    } catch (serviceError) {
+      console.error('Error fetching service plan details:', serviceError);
+      servicePlanName = `Service Plan ${srvid}`; // Fallback
     }
 
-    // Get account owner (if assigned)
-    const accountOwner = await getAccountOwnerByUsername(username);
-    const commissionAmount = accountOwner ? (paymentAmount * 0.1) : 0; // 10% commission
+    // Get user data from RADIUS API to extract owner information and customer details
+    let radiusOwner = '';
+    let customerData: {
+      first_name?: string;
+      last_name?: string;
+      email?: string;
+      phone?: string;
+      address?: string;
+      city?: string;
+      state?: string;
+      country?: string;
+    } = {};
+    
+    try {
+      const radiusUrl = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=get_userdata&username=${encodeURIComponent(username)}`;
+      const radiusResponse = await fetch(radiusUrl, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'PHSWEB-NextJS-App/1.0',
+        },
+      });
 
-    // Create transaction record
-    const transactionData = {
+      if (radiusResponse.ok) {
+        const radiusResult = await radiusResponse.text();
+        const radiusData = JSON.parse(radiusResult);
+        
+        // Parse RADIUS response (same format as in user API)
+        if (typeof radiusData === 'object' && radiusData !== null) {
+          const resultCode = radiusData["0"];
+          const userData = radiusData["1"];
+          
+          if (resultCode === 0 && userData) {
+            radiusOwner = userData.owner || '';
+            customerData = {
+              first_name: userData.firstname || '',
+              last_name: userData.lastname || '',
+              email: userData.email || '',
+              phone: userData.phone || userData.mobile || '',
+              address: userData.address || '',
+              city: userData.city || '',
+              state: userData.state || '',
+              country: userData.country || '',
+            };
+            
+            console.log(`Customer ${username} has owner: ${radiusOwner}`);
+          }
+        }
+      }
+    } catch (radiusError) {
+      console.error('Error fetching RADIUS user data:', radiusError);
+      // Continue without owner assignment if RADIUS fails
+    }
+
+    // Get or create customer with enhanced data
+    let customer = await getCustomerByUsername(username);
+    
+    if (customer) {
+      // Update existing customer with latest data from RADIUS
+      const updateData: {
+        username: string;
+        last_renewal_date: string;
+        first_name?: string;
+        last_name?: string;
+        email?: string;
+        phone?: string;
+        address?: string;
+        city?: string;
+        state?: string;
+        country?: string;
+        account_owner_id?: string;
+      } = {
+        ...customerData,
+        username: username,
+        last_renewal_date: new Date().toISOString(),
+      };
+      
+      // If customer doesn't have an owner but RADIUS has one, assign it
+      if (!customer.account_owner_id && radiusOwner) {
+        const owner = await getAccountOwnerByUsername(radiusOwner);
+        if (owner) {
+          updateData.account_owner_id = owner.id;
+          console.log(`Assigning customer ${username} to owner ${owner.name} (${radiusOwner})`);
+        }
+      }
+      
+      const updatedCustomer = await createOrUpdateCustomer(updateData);
+      if (updatedCustomer) {
+        customer = updatedCustomer;
+      }
+    } else {
+      // Create new customer record
+      console.log('Customer not found in database - creating new record');
+      
+      const newCustomerData: {
+        username: string;
+        last_renewal_date: string;
+        first_name?: string;
+        last_name?: string;
+        email?: string;
+        phone?: string;
+        address?: string;
+        city?: string;
+        state?: string;
+        country?: string;
+        account_owner_id?: string;
+      } = {
+        username: username,
+        ...customerData,
+        last_renewal_date: new Date().toISOString(),
+      };
+      
+      // Assign owner if found in RADIUS
+      if (radiusOwner) {
+        const owner = await getAccountOwnerByUsername(radiusOwner);
+        if (owner) {
+          newCustomerData.account_owner_id = owner.id;
+          console.log(`Creating customer ${username} with owner ${owner.name} (${radiusOwner})`);
+        } else {
+          console.log(`Warning: Owner '${radiusOwner}' from RADIUS not found in database`);
+        }
+      }
+      
+      const newCustomer = await createOrUpdateCustomer(newCustomerData);
+      if (newCustomer) {
+        customer = newCustomer;
+      }
+    }
+
+    // Get account owner for commission calculation
+    let accountOwner = null;
+    let commissionAmount = 0;
+    
+    if (customer?.account_owner_id) {
+      try {
+        const { getAccountOwner, calculateCommission } = await import('@/lib/database');
+        accountOwner = await getAccountOwner(customer.account_owner_id);
+        if (accountOwner && paymentAmount > 0) {
+          commissionAmount = calculateCommission(paymentAmount, accountOwner.commission_rate);
+          console.log(`Commission calculated: ${commissionAmount} (${accountOwner.commission_rate}% of ${paymentAmount}) for owner: ${accountOwner.name}`);
+        }
+      } catch (commissionError) {
+        console.error('Error fetching account owner by username:', commissionError);
+        // Fallback to simple 10% calculation
+        commissionAmount = paymentAmount * 0.1;
+      }
+    } else {
+      console.log('No owner assigned to customer - no commission will be tracked');
+    }
+
+    // Update the existing preliminary transaction record
+    const updateData = {
       customer_id: customer?.id,
-      account_owner_id: accountOwner?.id,
-      username: username,
-      service_plan_id: parseInt(srvid) || 0,
-      service_plan_name: `Service Plan ${srvid}`,
-      amount_paid: paymentAmount,
-      commission_rate: accountOwner ? 10.00 : 0,
+      account_owner_id: customer?.account_owner_id,
+      service_plan_name: servicePlanName, // Use actual service plan name
+      commission_rate: accountOwner ? accountOwner.commission_rate : 0,
       commission_amount: commissionAmount,
-      paystack_reference: event.data.reference,
-      payment_status: 'success',
-      renewal_period_days: timeunitexp,
-      renewal_start_date: new Date().toISOString(),
+      payment_status: 'success', // Update from 'processing' to 'success'
       renewal_end_date: newExpiry || new Date(Date.now() + timeunitexp * 24 * 60 * 60 * 1000).toISOString(),
-      customer_location: '',
     };
 
-    const transaction = await createRenewalTransaction(transactionData);
-    console.log('Transaction recorded via webhook:', transaction?.id);
+    // Update the existing transaction
+    const { data: updatedTransaction } = await supabaseAdmin
+      .from('renewal_transactions')
+      .update(updateData)
+      .eq('paystack_reference', event.data.reference)
+      .select('id')
+      .single();
+
+    console.log('Transaction updated via webhook:', updatedTransaction?.id);
 
   } catch (error) {
-    console.error('Error recording transaction via webhook:', error);
+    console.error('Error updating transaction via webhook:', error);
     // Don't throw - we don't want to fail the webhook for database issues
   }
 }
