@@ -137,21 +137,44 @@ const addCreditsToUser = async (
     const newExpiryDate = calculateNewExpiry(currentExpiry, daysToAdd);
     const formattedExpiry = newExpiryDate.toISOString().slice(0, 19).replace('T', ' '); // Format: YYYY-MM-DD HH:MM:SS
     
-    // Calculate the actual days to send to RADIUS API
-    // This should be the total days from current date to new expiry
-    const now = new Date();
-    const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const newExpiryDateOnly = new Date(newExpiryDate.getFullYear(), newExpiryDate.getMonth(), newExpiryDate.getDate());
+    // Calculate the correct days to send to RADIUS API
+    let daysForRadiusAPI = daysToAdd; // Default: just add the service plan days
     
-    const timeDiff = newExpiryDateOnly.getTime() - nowDateOnly.getTime();
-    const totalDaysForRadius = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+    if (currentExpiry && currentExpiry !== '0000-00-00' && currentExpiry !== '0000-00-00 00:00:00') {
+      try {
+        const currentExpiryDate = new Date(currentExpiry);
+        const now = new Date();
+        
+        // If current expiry is in the past, we need to add gap days + service days
+        if (currentExpiryDate <= now) {
+          const currentExpiryDateOnly = new Date(currentExpiryDate.getFullYear(), currentExpiryDate.getMonth(), currentExpiryDate.getDate());
+          const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          
+          const timeDiff = nowDateOnly.getTime() - currentExpiryDateOnly.getTime();
+          const gapDays = Math.max(0, Math.floor(timeDiff / (1000 * 60 * 60 * 24)));
+          
+          daysForRadiusAPI = gapDays + daysToAdd;
+          console.log(`Account expired - sending gap days (${gapDays}) + service days (${daysToAdd}) = ${daysForRadiusAPI} days to RADIUS API`);
+        } else {
+          // Current expiry is in future - just add the service plan days
+          daysForRadiusAPI = daysToAdd;
+          console.log(`Account active - sending only service days (${daysToAdd}) to RADIUS API`);
+        }
+      } catch {
+        console.log(`Error parsing expiry date, using service days only: ${daysToAdd}`);
+        daysForRadiusAPI = daysToAdd;
+      }
+    } else {
+      console.log(`No valid expiry date, using service days only: ${daysToAdd}`);
+      daysForRadiusAPI = daysToAdd;
+    }
     
     console.log(`Calculated new expiry: ${formattedExpiry} (adding ${daysToAdd} days)`);
-    console.log(`Total days to send to RADIUS API: ${totalDaysForRadius}`);
+    console.log(`Days to send to RADIUS API: ${daysForRadiusAPI}`);
     
     // Build URL with query parameters (same as other RADIUS API calls)
     // For add_credits API: dlbytes=0, ulbytes=0, totalbytes=dataAmount, expiry=days, unit=DAY, onlinetime=0
-    const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=add_credits&username=${encodeURIComponent(username)}&dlbytes=0&ulbytes=0&totalbytes=${trafficToAdd}&expiry=${totalDaysForRadius}&unit=DAY&onlinetime=0`;
+    const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=add_credits&username=${encodeURIComponent(username)}&dlbytes=0&ulbytes=0&totalbytes=${trafficToAdd}&expiry=${daysForRadiusAPI}&unit=DAY&onlinetime=0`;
 
     console.log('Adding credits to user:', username);
     console.log('- Days to add:', daysToAdd);
