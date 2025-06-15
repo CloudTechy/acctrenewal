@@ -14,6 +14,27 @@ interface RevenueBreakdownProps {
   height?: number
 }
 
+interface TooltipProps {
+  active?: boolean
+  payload?: Array<{
+    payload?: {
+      planName?: string
+      revenue?: number
+      commissions?: number
+      transactions?: number
+    }
+  }>
+}
+
+interface LabelProps {
+  cx: number
+  cy: number
+  midAngle: number
+  innerRadius: number
+  outerRadius: number
+  percent: number
+}
+
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316']
 
 export default function RevenueBreakdown({ data, height = 400 }: RevenueBreakdownProps) {
@@ -31,7 +52,7 @@ export default function RevenueBreakdown({ data, height = 400 }: RevenueBreakdow
     fill: COLORS[index % COLORS.length]
   }))
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: TooltipProps) => {
     if (active && payload && payload.length) {
       const data = payload[0]?.payload
       return (
@@ -52,7 +73,7 @@ export default function RevenueBreakdown({ data, height = 400 }: RevenueBreakdow
     return null
   }
 
-  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: LabelProps) => {
     if (percent < 0.05) return null // Don't show labels for slices less than 5%
     
     const RADIAN = Math.PI / 180
@@ -104,7 +125,8 @@ export default function RevenueBreakdown({ data, height = 400 }: RevenueBreakdow
           <Tooltip content={<CustomTooltip />} />
           <Legend 
             wrapperStyle={{ color: '#D1D5DB', fontSize: '12px' }}
-            formatter={(value, entry) => (
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            formatter={(value: any, entry: any) => (
               <span style={{ color: entry.color }}>
                 {entry.payload?.planName}
               </span>

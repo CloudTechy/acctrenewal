@@ -21,17 +21,6 @@ interface GeographicMetrics {
   customerCount: number
 }
 
-interface TransactionWithCustomer {
-  amount_paid: number
-  commission_amount: number
-  username: string
-  customers: {
-    city?: string
-    state?: string
-    country?: string
-  }
-}
-
 export async function calculateKPIMetrics(startDate?: string, endDate?: string): Promise<KPIMetrics> {
   try {
     // Get current period transactions
@@ -189,8 +178,11 @@ export async function calculateGeographicMetrics(): Promise<GeographicMetrics[]>
     // Group by location
     const locationMap: Record<string, GeographicMetrics> = {}
 
-    transactions.forEach((transaction: TransactionWithCustomer) => {
-      const customer = transaction.customers
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    transactions.forEach((transaction: any) => {
+      const customer = Array.isArray(transaction.customers) 
+        ? transaction.customers[0] 
+        : transaction.customers
       const locationKey = `${customer?.city || 'Unknown'}, ${customer?.state || 'Unknown'}, ${customer?.country || 'Unknown'}`
       
       if (!locationMap[locationKey]) {
