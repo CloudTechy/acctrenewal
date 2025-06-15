@@ -995,6 +995,13 @@ const ISPLandingPage: React.FC = () => {
       amount: Math.round((servicePlan.totalPrice || 0) * 100), // Convert to kobo
       publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || 'pk_test_your_public_key_here',
       metadata: {
+        // Direct metadata properties for easier access in webhook
+        username: originalUsername,
+        srvid: servicePlan.srvid?.toString() || '',
+        timeunitexp: servicePlan.timeunitexp || 30,
+        trafficunitcomb: servicePlan.trafficunitcomb || 0,
+        limitcomb: servicePlan.limitcomb || 0,
+        // Custom fields for display/reference
         custom_fields: [
           {
             display_name: 'Service Plan',
@@ -1007,9 +1014,24 @@ const ISPLandingPage: React.FC = () => {
             value: originalUsername
           },
           {
+            display_name: 'Service Plan ID',
+            variable_name: 'srvid',
+            value: servicePlan.srvid?.toString() || '0'
+          },
+          {
             display_name: 'Validity Period',
-            variable_name: 'validity_days',
-            value: `${servicePlan.timeunitexp || 0} days`
+            variable_name: 'timeunitexp',
+            value: (servicePlan.timeunitexp || 30).toString()
+          },
+          {
+            display_name: 'Traffic Allowance',
+            variable_name: 'trafficunitcomb',
+            value: (servicePlan.trafficunitcomb || 0).toString()
+          },
+          {
+            display_name: 'Traffic Limit',
+            variable_name: 'limitcomb',
+            value: (servicePlan.limitcomb || 0).toString()
           }
         ]
       }
