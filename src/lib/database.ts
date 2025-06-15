@@ -195,7 +195,10 @@ export async function getOwnerCommissions(
     }
 
     if (endDate) {
-      query = query.lte('created_at', endDate)
+      // Add time to end date to include the full day
+      const endDateTime = new Date(endDate)
+      endDateTime.setHours(23, 59, 59, 999)
+      query = query.lte('created_at', endDateTime.toISOString())
     }
 
     const { data, error } = await query
