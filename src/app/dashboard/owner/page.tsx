@@ -49,8 +49,8 @@ export default function OwnerDashboard() {
   const [selectedOwnerId, setSelectedOwnerId] = useState<string>('')
   const [owners, setOwners] = useState<OwnerData[]>([])
   const [dateRange, setDateRange] = useState({
-    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Last 30 days
-    endDate: new Date().toISOString().split('T')[0]
+    startDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Last 90 days
+    endDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0] // Tomorrow to include today's transactions
   })
 
   // Fetch all owners for selection
@@ -234,18 +234,21 @@ export default function OwnerDashboard() {
           <div className="space-y-8">
             {/* Owner Info */}
             {owner && (
-              <Card className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                <CardContent className="p-6">
+              <Card className="bg-gray-800/60 border-gray-700 hover:bg-gray-800/80 transition-all mb-6">
+                <CardContent className="p-4">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-2xl font-bold">{owner.name}</h2>
-                      <p className="text-blue-100">{owner.email}</p>
-                      <p className="text-blue-100">Commission Rate: {owner.commission_rate}%</p>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <User className="h-5 w-5 text-blue-400" />
+                        <h2 className="text-xl font-bold text-white">{owner.name}</h2>
+                      </div>
+                      <p className="text-gray-300 text-sm mb-1">{owner.email}</p>
+                      <p className="text-gray-400 text-sm">Commission Rate: {owner.commission_rate}%</p>
                     </div>
                     <Button 
                       onClick={downloadStatement}
                       variant="outline"
-                      className="border-white text-white hover:bg-white hover:text-blue-600"
+                      className="border-gray-600 text-gray-300 hover:bg-gray-700"
                       disabled={!commissions.length}
                     >
                       <Download className="w-4 h-4 mr-2" />
@@ -258,21 +261,19 @@ export default function OwnerDashboard() {
 
             {/* Stats Cards */}
             {stats && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
                 >
-                  <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-green-100 text-sm">Total Commissions</p>
-                          <p className="text-2xl font-bold">{formatCurrency(stats.totalCommissions)}</p>
-                        </div>
-                        <DollarSign className="h-8 w-8 text-green-200" />
+                  <Card className="bg-gray-800/60 border-gray-700 hover:bg-gray-800/80 transition-all">
+                    <CardContent className="p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <DollarSign className="h-4 w-4 text-green-400" />
+                        <p className="text-gray-300 text-sm font-medium">Total Commissions</p>
                       </div>
+                      <p className="text-white text-xl font-bold">{formatCurrency(stats.totalCommissions)}</p>
                     </CardContent>
                   </Card>
                 </motion.div>
@@ -282,15 +283,13 @@ export default function OwnerDashboard() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 }}
                 >
-                  <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-blue-100 text-sm">This Period</p>
-                          <p className="text-2xl font-bold">{formatCurrency(stats.monthlyCommissions)}</p>
-                        </div>
-                        <Calendar className="h-8 w-8 text-blue-200" />
+                  <Card className="bg-gray-800/60 border-gray-700 hover:bg-gray-800/80 transition-all">
+                    <CardContent className="p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Calendar className="h-4 w-4 text-blue-400" />
+                        <p className="text-gray-300 text-sm font-medium">This Period</p>
                       </div>
+                      <p className="text-white text-xl font-bold">{formatCurrency(stats.monthlyCommissions)}</p>
                     </CardContent>
                   </Card>
                 </motion.div>
@@ -300,15 +299,13 @@ export default function OwnerDashboard() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
                 >
-                  <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-purple-100 text-sm">Active Customers</p>
-                          <p className="text-2xl font-bold">{stats.activeCustomers}</p>
-                        </div>
-                        <Users className="h-8 w-8 text-purple-200" />
+                  <Card className="bg-gray-800/60 border-gray-700 hover:bg-gray-800/80 transition-all">
+                    <CardContent className="p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Users className="h-4 w-4 text-purple-400" />
+                        <p className="text-gray-300 text-sm font-medium">Active Customers</p>
                       </div>
+                      <p className="text-white text-xl font-bold">{stats.activeCustomers}</p>
                     </CardContent>
                   </Card>
                 </motion.div>
@@ -318,15 +315,13 @@ export default function OwnerDashboard() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
                 >
-                  <Card className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-orange-100 text-sm">Total Renewals</p>
-                          <p className="text-2xl font-bold">{stats.totalTransactions}</p>
-                        </div>
-                        <TrendingUp className="h-8 w-8 text-orange-200" />
+                  <Card className="bg-gray-800/60 border-gray-700 hover:bg-gray-800/80 transition-all">
+                    <CardContent className="p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <TrendingUp className="h-4 w-4 text-orange-400" />
+                        <p className="text-gray-300 text-sm font-medium">Total Renewals</p>
                       </div>
+                      <p className="text-white text-xl font-bold">{stats.totalTransactions}</p>
                     </CardContent>
                   </Card>
                 </motion.div>
