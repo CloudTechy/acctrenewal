@@ -430,6 +430,7 @@ interface UserDetailsProps {
   onPaymentClose: () => void;
   paystackConfig: PaystackConfig | null;
   isProcessingPayment: boolean;
+  originalUsername: string;
 }
 
 // Client-side payment button component
@@ -488,7 +489,8 @@ const UserDetails: React.FC<UserDetailsProps> = ({
   onPaymentSuccess, 
   onPaymentClose,
   paystackConfig,
-  isProcessingPayment 
+  isProcessingPayment,
+  originalUsername
 }) => {
   const accountStatus = getAccountStatus(userData);
   const daysToExpiry = calculateDaysToExpiry(userData.expiry || '');
@@ -520,9 +522,9 @@ const UserDetails: React.FC<UserDetailsProps> = ({
               </div>
               
               <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                <span className="text-gray-400 font-medium text-sm">Credits</span>
+                <span className="text-gray-400 font-medium text-sm">Username</span>
                 <span className="text-gray-100 font-bold text-lg">
-                  {formatCurrency(userData.credits || 0)}
+                  {originalUsername || 'N/A'}
                 </span>
               </div>
               
@@ -762,7 +764,6 @@ const Navbar: React.FC<{ onHomeClick?: () => void }> = ({ onHomeClick }) => {
 
   const menuItems = [
     { name: 'Home', href: '/' },
-    { name: 'Hotspot', href: '/hotspot' },
     { name: 'Terms', href: '/terms' },
     { name: 'Privacy', href: '/privacy' },
     { name: 'Contact', href: '/contact' },
@@ -1242,6 +1243,7 @@ const ISPLandingPage: React.FC = () => {
                         onPaymentClose={handlePaymentClose}
                         paystackConfig={generatePaystackConfig()}
                         isProcessingPayment={isProcessingPayment}
+                        originalUsername={originalUsername}
                       />
                     </div>
                   ) : (
