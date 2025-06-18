@@ -89,38 +89,36 @@ async function addCreditsToUser(
   currentExpiry?: string
 ): Promise<{ success: boolean; newExpiry?: string }> {
   try {
-    // Calculate proper expiry date based on current expiry (same logic as main API)
-    let calculatedExpiry: Date;
-    
+    console.log(`Adding ${daysToAdd} days to user ${username}`);
     if (currentExpiry) {
-      const current = new Date(currentExpiry);
-      const now = new Date();
-      
-      // If current expiry is in the future, add to it
-      if (current > now) {
-        calculatedExpiry = new Date(current);
-        calculatedExpiry.setDate(calculatedExpiry.getDate() + daysToAdd);
-        console.log(`Current expiry ${currentExpiry} is in future, adding ${daysToAdd} days to it`);
-      } else {
-        // If expired, start from now
-        calculatedExpiry = new Date();
-        calculatedExpiry.setDate(calculatedExpiry.getDate() + daysToAdd);
-        console.log(`Current expiry ${currentExpiry} is in past, adding ${daysToAdd} days from now`);
-      }
-    } else {
-      // No current expiry provided, start from now
-      calculatedExpiry = new Date();
-      calculatedExpiry.setDate(calculatedExpiry.getDate() + daysToAdd);
-      console.log(`No current expiry provided, adding ${daysToAdd} days from now`);
+      console.log(`User current expiry: ${currentExpiry}`);
     }
 
-    const formattedExpiry = calculatedExpiry.toISOString().slice(0, 19).replace('T', ' ');
-    console.log(`Calculated new expiry: ${formattedExpiry} (adding ${daysToAdd} days)`);
+    // Calculate the correct number of days to add based on current expiry
+    let actualDaysToAdd = daysToAdd;
+    
+    if (currentExpiry) {
+      const expiryDate = new Date(currentExpiry);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Set to start of day for accurate comparison
+      
+      // If account has expired, add the expired days to ensure full service period
+      if (expiryDate < today) {
+        const expiredDays = Math.ceil((today.getTime() - expiryDate.getTime()) / (1000 * 60 * 60 * 24));
+        actualDaysToAdd = daysToAdd + expiredDays;
+        console.log(`Account expired ${expiredDays} days ago. Adding ${actualDaysToAdd} days total (${daysToAdd} service + ${expiredDays} expired)`);
+      } else {
+        console.log(`Account expires in the future. Adding ${daysToAdd} days as planned`);
+      }
+    } else {
+      console.log(`No current expiry provided. Adding ${daysToAdd} days from today`);
+    }
 
-    const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=add_credits&username=${encodeURIComponent(username)}&dlbytes=0&ulbytes=0&totalbytes=${trafficToAdd}&expiry=${daysToAdd}&unit=DAY&onlinetime=0`;
+    const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=add_credits&username=${encodeURIComponent(username)}&dlbytes=0&ulbytes=0&totalbytes=${trafficToAdd}&expiry=${actualDaysToAdd}&unit=DAY&onlinetime=0`;
 
     console.log('Adding credits to user via webhook:', username);
-    console.log('- Days to add:', daysToAdd);
+    console.log('- Service plan days:', daysToAdd);
+    console.log('- Actual days to add:', actualDaysToAdd);
     console.log('- Traffic to add (bytes):', trafficToAdd);
 
     const response = await fetch(url, {
@@ -147,10 +145,14 @@ async function addCreditsToUser(
         if (resultCode === 0) {
           console.log('Credits added successfully via webhook');
           
-          // Return the calculated expiry (more reliable than API response)
+          // Use RADIUS API response as the authoritative expiry date
+          // This ensures consistency between webhook and RADIUS system
+          const apiExpiry = resultData.expiry;
+          console.log(`RADIUS API set expiry to: ${apiExpiry}`);
+          
           return { 
             success: true, 
-            newExpiry: formattedExpiry
+            newExpiry: apiExpiry // Use RADIUS response, not internal calculation
           };
         } else {
           console.error('RADIUS add_credits failed with code:', resultCode, resultData);
@@ -302,7 +304,7 @@ export async function POST(request: NextRequest) {
             commission_rate: 0, // Will be updated later
             commission_amount: 0, // Will be updated later
             paystack_reference: event.data.reference,
-            payment_status: 'processing', // Mark as processing initially
+            payment_status: 'processing' as const, // Mark as processing initially
             renewal_period_days: timeunitexp,
             renewal_start_date: new Date().toISOString(),
             renewal_end_date: new Date(Date.now() + timeunitexp * 24 * 60 * 60 * 1000).toISOString(),
@@ -574,7 +576,7 @@ async function recordTransaction(event: PaystackWebhookEvent, newExpiry?: string
       service_plan_name: servicePlanName, // Use actual service plan name
       commission_rate: accountOwner ? accountOwner.commission_rate : 0,
       commission_amount: commissionAmount,
-      payment_status: 'success', // Update from 'processing' to 'success'
+      payment_status: 'success' as const, // Update from 'processing' to 'success'
       renewal_end_date: newExpiry || new Date(Date.now() + timeunitexp * 24 * 60 * 60 * 1000).toISOString(),
     };
 
@@ -605,4 +607,4 @@ export async function PUT() {
 
 export async function DELETE() {
   return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
-} 
+}

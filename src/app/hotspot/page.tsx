@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Wifi, 
   MapPin, 
   Users, 
   Activity, 
@@ -11,166 +10,542 @@ import {
   Plus,
   Edit3,
   Trash2,
-  Eye,
   Copy,
-  ExternalLink
+  ExternalLink,
+  RefreshCw,
+  AlertTriangle,
+  Wrench,
+  XCircle,
+  Clock,
+  Wifi,
+  WifiOff,
+  Router,
+  TestTube,
+  Save,
+  X,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 
 // Location management interface
 interface HotspotLocation {
   id: string;
   name: string;
-  displayName: string;
+  display_name: string;
   status: 'active' | 'inactive' | 'maintenance';
+  description?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface RouterConfig {
+  id: string;
+  location_id: string;
+  host: string;
+  username: string;
+  password: string; // Plain text password
+  port: number;
+  api_port: number;
+  connection_type: 'api' | 'ssh' | 'winbox';
+  is_active: boolean;
+  connection_status: 'connected' | 'disconnected' | 'error' | 'unknown';
+  last_connected_at?: string;
+  last_error?: string;
+}
+
+interface LocationWithStats extends HotspotLocation {
   activeUsers: number;
   totalUsers: number;
   lastActivity: string;
   loginUrl: string;
-  mikrotikConfig?: {
-    routerIp: string;
-    hotspotProfile: string;
+  routerConfig?: RouterConfig;
+  connectionDetails?: {
+    uptime: string;
+    version: string;
+    cpuLoad: number;
+    memoryUsage: number;
   };
 }
 
-// Mock data for demonstration
-const mockLocations: HotspotLocation[] = [
-  {
-    id: 'awka',
-    name: 'Awka',
-    displayName: 'PHSWEB Awka Branch',
-    status: 'active',
-    activeUsers: 23,
-    totalUsers: 150,
-    lastActivity: '2 minutes ago',
-    loginUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/hotspot/awka`,
-    mikrotikConfig: {
-      routerIp: '192.168.1.1',
-      hotspotProfile: 'hsprof1'
-    }
-  },
-  {
-    id: 'lagos',
-    name: 'Lagos',
-    displayName: 'PHSWEB Lagos Island',
-    status: 'active',
-    activeUsers: 45,
-    totalUsers: 300,
-    lastActivity: '1 minute ago',
-    loginUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/hotspot/lagos`,
-    mikrotikConfig: {
-      routerIp: '192.168.2.1',
-      hotspotProfile: 'hsprof2'
-    }
-  },
-  {
-    id: 'abuja',
-    name: 'Abuja',
-    displayName: 'PHSWEB Abuja Central',
-    status: 'maintenance',
-    activeUsers: 0,
-    totalUsers: 200,
-    lastActivity: '1 hour ago',
-    loginUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/hotspot/abuja`,
-    mikrotikConfig: {
-      routerIp: '192.168.3.1',
-      hotspotProfile: 'hsprof3'
-    }
-  }
-];
+interface HotspotStatsResponse {
+  locations: Record<string, {
+    stats?: {
+    activeUsers: number;
+    totalUsers: number;
+    lastActivity: string;
+    };
+    routerStatus?: {
+      isOnline: boolean;
+      uptime: string;
+      version: string;
+      cpuLoad: number;
+      freeMemory: number;
+      totalMemory: number;
+    };
+    error?: string;
+  }>;
+  timestamp: string;
+  totalActiveUsers: number;
+  totalLocations: number;
+  activeLocations: number;
+}
 
 export default function HotspotManagementPage() {
-  const [locations, setLocations] = useState<HotspotLocation[]>(mockLocations);
+  const [locations, setLocations] = useState<LocationWithStats[]>([]);
   const [showAddLocation, setShowAddLocation] = useState(false);
+  const [showRouterConfig, setShowRouterConfig] = useState<string | null>(null);
+  const [isFetching, setIsFetching] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isTestingConnection, setIsTestingConnection] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [connectionTest, setConnectionTest] = useState<{[key: string]: 'testing' | 'success' | 'failed'}>({});
+  const [showPassword, setShowPassword] = useState(false);
+  
   const [newLocation, setNewLocation] = useState({
     id: '',
     name: '',
-    displayName: '',
-    routerIp: ''
+    display_name: '',
+    description: '',
+    address: '',
+    city: '',
+    state: ''
+  });
+  
+  const [routerConfig, setRouterConfig] = useState({
+    host: '',
+    username: '',
+    password: '',
+    port: 8728,
+    api_port: 80,
+    connection_type: 'api' as 'api' | 'ssh' | 'winbox'
   });
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'inactive':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'maintenance':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+  // Fetch locations from database
+  const fetchLocations = async () => {
+    try {
+      const response = await fetch('/api/locations');
+      const data = await response.json();
+      
+      if (data.success) {
+        const locationsWithDefaults = data.data.map((location: HotspotLocation) => ({
+          ...location,
+          activeUsers: 0,
+          totalUsers: 0,
+          lastActivity: 'Loading...',
+          loginUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/hotspot/${location.id}`
+        }));
+        setLocations(locationsWithDefaults);
+
+        // Fetch router configs for each location
+        await Promise.all(locationsWithDefaults.map((location: LocationWithStats) => 
+          fetchRouterConfigForLocation(location.id)
+        ));
+      } else {
+        throw new Error(data.error || 'Failed to fetch locations');
+      }
+    } catch (err) {
+      console.error('Error fetching locations:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch locations');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch router config for a specific location
+  const fetchRouterConfigForLocation = async (locationId: string) => {
+    try {
+      const response = await fetch(`/api/locations/${locationId}/router`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setLocations(prev => prev.map(loc => 
+          loc.id === locationId 
+            ? { ...loc, routerConfig: data.data }
+            : loc
+        ));
+      }
+    } catch (err) {
+      console.error(`Error fetching router config for ${locationId}:`, err);
+    }
+  };
+
+  // Fetch real-time data from API
+  const fetchHotspotStats = async () => {
+    try {
+      setError(null);
+      setIsFetching(true);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
+      const response = await fetch('/api/hotspot/stats', {
+        signal: controller.signal,
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data: HotspotStatsResponse = await response.json();
+      
+      // Update locations with real data
+      setLocations(prevLocations => 
+        prevLocations.map(location => {
+          const locationData = data.locations[location.id];
+          if (locationData) {
+            return {
+              ...location,
+              activeUsers: locationData.stats?.activeUsers || 0,
+              totalUsers: locationData.stats?.totalUsers || 0,
+              lastActivity: locationData.stats?.lastActivity || 'No data',
+              connectionDetails: locationData.routerStatus ? {
+                uptime: locationData.routerStatus.uptime,
+                version: locationData.routerStatus.version,
+                cpuLoad: locationData.routerStatus.cpuLoad,
+                memoryUsage: locationData.routerStatus.totalMemory > 0 ? 
+                  ((locationData.routerStatus.totalMemory - locationData.routerStatus.freeMemory) / locationData.routerStatus.totalMemory) * 100 : 0
+              } : undefined
+            };
+          }
+          return location;
+        })
+      );
+    } catch (err) {
+      console.error('Error fetching hotspot stats:', err);
+      
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          setError('Request timeout - API is taking too long to respond');
+        } else {
+          setError(err.message);
+        }
+      } else {
+        setError('Failed to fetch stats');
+      }
+    } finally {
+      setIsFetching(false);
+    }
+  };
+
+  // Test router connection
+  const testConnection = async (locationId: string, config: RouterConfig) => {
+    setIsTestingConnection(locationId);
+    setConnectionTest(prev => ({ ...prev, [locationId]: 'testing' }));
+    
+    try {
+      const response = await fetch('/api/hotspot/stats', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          host: config.host,
+          user: config.username,
+          password: config.password || routerConfig.password, // Use config password or form password
+          port: config.api_port || 80 // Use HTTP port for REST API
+        }),
+      });
+      
+      const data = await response.json();
+      console.log('Test connection response:', data);
+      
+      setConnectionTest(prev => ({ 
+        ...prev, 
+        [locationId]: data.connected ? 'success' : 'failed' 
+      }));
+      
+      // Update router config status
+      if (data.connected) {
+        await fetchRouterConfigForLocation(locationId);
+      }
+      
+    } catch (err) {
+      console.error('Connection test failed:', err);
+      setConnectionTest(prev => ({ ...prev, [locationId]: 'failed' }));
+    } finally {
+      setIsTestingConnection(null);
+    }
+  };
+
+  // Load existing router config when opening modal
+  const openRouterConfig = async (locationId: string) => {
+    const location = locations.find(l => l.id === locationId);
+    if (location?.routerConfig) {
+      setRouterConfig({
+        host: location.routerConfig.host,
+        username: location.routerConfig.username,
+        password: '', // Don't pre-fill password for security
+        port: location.routerConfig.port,
+        api_port: location.routerConfig.api_port,
+        connection_type: location.routerConfig.connection_type
+      });
+    } else {
+      // Reset to defaults for new config
+      setRouterConfig({
+        host: '',
+        username: 'admin',
+        password: '',
+        port: 8728,
+        api_port: 80,
+        connection_type: 'api'
+      });
+    }
+    setShowRouterConfig(locationId);
+  };
+
+  // Initial load and periodic updates
+  useEffect(() => {
+    fetchLocations().then(() => {
+    fetchHotspotStats();
+    });
+    
+    const interval = setInterval(fetchHotspotStats, 300000); // 5 minutes
+    
+    return () => {
+      clearInterval(interval);
+    };
+  }, []);
+
+  const getConnectionStatusBadge = (config?: RouterConfig) => {
+    if (!config) {
+      return <Badge variant="secondary" className="bg-gray-600 text-gray-300">Not Configured</Badge>;
+    }
+    
+    switch (config.connection_status) {
+      case 'connected':
+        return <Badge className="bg-green-900/50 text-green-400 border-green-700">Connected</Badge>;
+      case 'disconnected':
+        return <Badge variant="outline" className="border-yellow-600 text-yellow-400">Disconnected</Badge>;
+      case 'error':
+        return <Badge variant="destructive" className="bg-red-900/50 text-red-400 border-red-700">Error</Badge>;
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return <Badge variant="secondary" className="bg-gray-600 text-gray-300">Unknown</Badge>;
+    }
+  };
+
+  const getConnectionIcon = (config?: RouterConfig) => {
+    if (!config) return <Router className="h-4 w-4 text-gray-400" />;
+    
+    switch (config.connection_status) {
+      case 'connected':
+        return <Wifi className="h-4 w-4 text-green-400" />;
+      case 'disconnected':
+        return <WifiOff className="h-4 w-4 text-yellow-400" />;
+      case 'error':
+        return <XCircle className="h-4 w-4 text-red-400" />;
+      default:
+        return <Clock className="h-4 w-4 text-gray-400" />;
     }
   };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    // You could add a toast notification here
   };
 
-  const handleAddLocation = (e: React.FormEvent) => {
+  const handleAddLocation = async (e: React.FormEvent) => {
     e.preventDefault();
-    const location: HotspotLocation = {
-      ...newLocation,
-      status: 'inactive',
-      activeUsers: 0,
-      totalUsers: 0,
-      lastActivity: 'Never',
-      loginUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/hotspot/${newLocation.id}`,
-      mikrotikConfig: {
-        routerIp: newLocation.routerIp,
-        hotspotProfile: 'default'
+    try {
+      const response = await fetch('/api/locations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newLocation),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        await fetchLocations();
+        setNewLocation({ id: '', name: '', display_name: '', description: '', address: '', city: '', state: '' });
+        setShowAddLocation(false);
+      } else {
+        setError(data.error || 'Failed to create location');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create location');
+    }
+  };
+
+  const handleSaveRouterConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showRouterConfig) return;
+
+    try {
+      const location = locations.find(l => l.id === showRouterConfig);
+      const method = location?.routerConfig ? 'PUT' : 'POST';
+      
+      const response = await fetch(`/api/locations/${showRouterConfig}/router`, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(routerConfig),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        await fetchRouterConfigForLocation(showRouterConfig);
+        setShowRouterConfig(null);
+        setRouterConfig({
+          host: '',
+          username: '',
+          password: '',
+          port: 8728,
+          api_port: 80,
+          connection_type: 'api'
+        });
+        
+        // Refresh stats to test new connection
+        fetchHotspotStats();
+      } else {
+        setError(data.error || 'Failed to save router configuration');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save router configuration');
       }
     };
     
-    setLocations([...locations, location]);
-    setNewLocation({ id: '', name: '', displayName: '', routerIp: '' });
-    setShowAddLocation(false);
+  const handleDeleteLocation = async (locationId: string) => {
+    if (!confirm('Are you sure you want to delete this location? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/locations/${locationId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        await fetchLocations();
+      } else {
+        setError(data.error || 'Failed to delete location');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete location');
+    }
+  };
+
+  const handleRefresh = () => {
+    fetchHotspotStats();
   };
 
   const totalActiveUsers = locations.reduce((sum, loc) => sum + loc.activeUsers, 0);
   const totalUsers = locations.reduce((sum, loc) => sum + loc.totalUsers, 0);
-  const activeLocations = locations.filter(loc => loc.status === 'active').length;
+  const activeLocations = locations.filter(loc => loc.routerConfig?.connection_status === 'connected').length;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-blue-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-400 text-lg">Loading hotspot locations...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-blue-950">
+      <div className="container mx-auto px-4 py-8">
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-sm border-b border-white/20 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg">
-                <Wifi className="h-6 w-6 text-white" />
+        <div className="flex items-center justify-between mb-8">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-center gap-4"
+          >
+            <div className="p-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg">
+              <Activity className="h-8 w-8 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Hotspot Management</h1>
-                <p className="text-sm text-gray-600">Manage your MikroTik hotspot locations</p>
-              </div>
+              <h1 className="text-4xl font-bold text-white">Hotspot Locations</h1>
+              <p className="text-gray-400">Monitor and manage your hotspot network</p>
             </div>
-            <div className="flex items-center gap-3">
-              <Link href="/">
-                <Button variant="outline" size="sm">
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Main Site
-                </Button>
-              </Link>
+          </motion.div>
+          
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-center gap-3"
+          >
+            <Link href="/configure-router">
+              <Button className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white">
+                <Wrench className="h-4 w-4 mr-2" />
+                Configure Router
+              </Button>
+            </Link>
+              <Button 
+                onClick={handleRefresh}
+                disabled={isFetching}
+                variant="outline" 
+              className="border-gray-600 text-white hover:bg-gray-800"
+              >
+              {isFetching ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+                Refresh
+              </Button>
               <Button 
                 onClick={() => setShowAddLocation(true)}
-                size="sm"
-                className="bg-gradient-to-r from-blue-600 to-purple-600"
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Location
               </Button>
-            </div>
-          </div>
-        </div>
+          </motion.div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Error Alert */}
+        <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="mb-6 p-4 bg-red-900/50 border border-red-800 rounded-lg"
+          >
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-red-400">
+              <AlertTriangle className="h-5 w-5" />
+                    <p className="font-medium">Error</p>
+                  </div>
+                  <p className="text-red-300 mt-1 text-sm">{error}</p>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setError(null)}
+                  className="text-red-400 hover:text-red-300"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+            </div>
+          </motion.div>
+        )}
+        </AnimatePresence>
+
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <motion.div
@@ -178,14 +553,14 @@ export default function HotspotManagementPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+            <Card className="bg-gray-900/80 border-gray-700">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-blue-100 text-sm">Active Users</p>
-                    <p className="text-3xl font-bold">{totalActiveUsers}</p>
+                    <p className="text-gray-400 text-sm">Active Users</p>
+                    <p className="text-3xl font-bold text-white">{totalActiveUsers}</p>
                   </div>
-                  <Users className="h-8 w-8 text-blue-200" />
+                  <Users className="h-8 w-8 text-blue-400" />
                 </div>
               </CardContent>
             </Card>
@@ -196,14 +571,14 @@ export default function HotspotManagementPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
+            <Card className="bg-gray-900/80 border-gray-700">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-green-100 text-sm">Total Users</p>
-                    <p className="text-3xl font-bold">{totalUsers}</p>
+                    <p className="text-gray-400 text-sm">Total Users</p>
+                    <p className="text-3xl font-bold text-white">{totalUsers}</p>
                   </div>
-                  <Activity className="h-8 w-8 text-green-200" />
+                  <Activity className="h-8 w-8 text-green-400" />
                 </div>
               </CardContent>
             </Card>
@@ -214,14 +589,14 @@ export default function HotspotManagementPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
+            <Card className="bg-gray-900/80 border-gray-700">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-purple-100 text-sm">Active Locations</p>
-                    <p className="text-3xl font-bold">{activeLocations}</p>
+                    <p className="text-gray-400 text-sm">Connected Locations</p>
+                    <p className="text-3xl font-bold text-white">{activeLocations}</p>
                   </div>
-                  <MapPin className="h-8 w-8 text-purple-200" />
+                  <MapPin className="h-8 w-8 text-purple-400" />
                 </div>
               </CardContent>
             </Card>
@@ -232,14 +607,14 @@ export default function HotspotManagementPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
-            <Card className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
+            <Card className="bg-gray-900/80 border-gray-700">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-orange-100 text-sm">Total Locations</p>
-                    <p className="text-3xl font-bold">{locations.length}</p>
+                    <p className="text-gray-400 text-sm">Total Locations</p>
+                    <p className="text-3xl font-bold text-white">{locations.length}</p>
                   </div>
-                  <Settings className="h-8 w-8 text-orange-200" />
+                  <Settings className="h-8 w-8 text-orange-400" />
                 </div>
               </CardContent>
             </Card>
@@ -248,7 +623,7 @@ export default function HotspotManagementPage() {
 
         {/* Locations List */}
         <div className="space-y-6">
-          <h2 className="text-2xl font-bold text-gray-900">Hotspot Locations</h2>
+          <h2 className="text-2xl font-bold text-white">Hotspot Locations</h2>
           
           <div className="grid gap-6">
             {locations.map((location, index) => (
@@ -258,7 +633,7 @@ export default function HotspotManagementPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 * index }}
               >
-                <Card className="hover:shadow-lg transition-all duration-200">
+                <Card className="bg-gray-900/80 border-gray-700 hover:bg-gray-900/90 transition-all duration-200">
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -266,49 +641,128 @@ export default function HotspotManagementPage() {
                           <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg">
                             <MapPin className="h-5 w-5 text-white" />
                           </div>
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-900">{location.displayName}</h3>
-                            <p className="text-sm text-gray-600">ID: {location.id}</p>
+                          <div className="flex-1">
+                            <h3 className="text-lg font-semibold text-white">{location.display_name}</h3>
+                            <p className="text-sm text-gray-400">ID: {location.id}</p>
+                            {location.city && location.state && (
+                              <p className="text-sm text-gray-500">{location.city}, {location.state}</p>
+                            )}
                           </div>
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(location.status)}`}>
-                            {location.status.toUpperCase()}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                          <div>
-                            <p className="text-sm text-gray-600">Active Users</p>
-                            <p className="text-xl font-semibold text-blue-600">{location.activeUsers}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Total Users</p>
-                            <p className="text-xl font-semibold text-green-600">{location.totalUsers}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Router IP</p>
-                            <p className="text-sm font-mono text-gray-800">{location.mikrotikConfig?.routerIp}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Last Activity</p>
-                            <p className="text-sm text-gray-800">{location.lastActivity}</p>
-                          </div>
-                        </div>
-
-                        <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                          <p className="text-xs text-gray-600 mb-1">Hotspot Login URL:</p>
                           <div className="flex items-center gap-2">
-                            <code className="text-xs bg-white px-2 py-1 rounded border flex-1 text-gray-800">
+                            {getConnectionIcon(location.routerConfig)}
+                            {getConnectionStatusBadge(location.routerConfig)}
+                          </div>
+                        </div>
+
+                        {/* Connection Details */}
+                        {location.routerConfig && (
+                          <div className="bg-gray-800/50 rounded-lg p-3 mb-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="text-sm font-medium text-white flex items-center gap-2">
+                                <Router className="h-4 w-4" />
+                                Router Connection
+                              </h4>
+                              <div className="flex items-center gap-2">
+                                {connectionTest[location.id] && (
+                                  <Badge variant={connectionTest[location.id] === 'success' ? 'default' : 'destructive'} className="text-xs">
+                                    {connectionTest[location.id] === 'testing' && 'Testing...'}
+                                    {connectionTest[location.id] === 'success' && 'Test Passed'}
+                                    {connectionTest[location.id] === 'failed' && 'Test Failed'}
+                                  </Badge>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => testConnection(location.id, location.routerConfig!)}
+                                  disabled={isTestingConnection === location.id}
+                                  className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600 h-6 px-2"
+                                >
+                                  <TestTube className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                              <div className="text-gray-400">
+                                <span>Host: </span>
+                                <span className="text-gray-300">{location.routerConfig.host}:{location.routerConfig.port}</span>
+                              </div>
+                              <div className="text-gray-400">
+                                <span>Type: </span>
+                                <span className="text-gray-300 capitalize">{location.routerConfig.connection_type}</span>
+                              </div>
+                              {location.routerConfig.last_connected_at && (
+                                <div className="text-gray-400 col-span-2">
+                                  <span>Last Connected: </span>
+                                  <span className="text-gray-300">
+                                    {new Date(location.routerConfig.last_connected_at).toLocaleString()}
+                                  </span>
+                                </div>
+                              )}
+                              {location.routerConfig.last_error && (
+                                <div className="text-red-400 col-span-2">
+                                  <span>Error: </span>
+                                  <span className="text-red-300">{location.routerConfig.last_error}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Connection Stats */}
+                            {location.connectionDetails && (
+                              <div className="mt-3 pt-3 border-t border-gray-700">
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                  <div className="text-gray-400">
+                                    <span>Uptime: </span>
+                                    <span className="text-green-400">{location.connectionDetails.uptime}</span>
+                                  </div>
+                                  <div className="text-gray-400">
+                                    <span>Version: </span>
+                                    <span className="text-gray-300">{location.connectionDetails.version}</span>
+                                  </div>
+                                  <div className="text-gray-400">
+                                    <span>CPU: </span>
+                                    <span className="text-blue-400">{location.connectionDetails.cpuLoad}%</span>
+                                  </div>
+                                  <div className="text-gray-400">
+                                    <span>Memory: </span>
+                                    <span className="text-purple-400">{location.connectionDetails.memoryUsage.toFixed(1)}%</span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                          <div>
+                            <p className="text-sm text-gray-400">Active Users</p>
+                            <p className="text-xl font-semibold text-blue-400">{location.activeUsers}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-400">Total Users</p>
+                            <p className="text-xl font-semibold text-green-400">{location.totalUsers}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-400">Last Activity</p>
+                            <p className="text-sm text-gray-300">{location.lastActivity}</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-gray-800/50 rounded-lg p-3">
+                          <p className="text-xs text-gray-400 mb-1">Hotspot Login URL:</p>
+                          <div className="flex items-center gap-2">
+                            <code className="text-xs bg-gray-700 px-2 py-1 rounded border border-gray-600 flex-1 text-gray-300">
                               {location.loginUrl}
                             </code>
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => copyToClipboard(location.loginUrl)}
+                              className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700 h-6 px-2"
                             >
                               <Copy className="h-3 w-3" />
                             </Button>
                             <Link href={location.loginUrl} target="_blank">
-                              <Button size="sm" variant="outline">
+                              <Button size="sm" variant="outline" className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700 h-6 px-2">
                                 <ExternalLink className="h-3 w-3" />
                               </Button>
                             </Link>
@@ -316,14 +770,28 @@ export default function HotspotManagementPage() {
                         </div>
                       </div>
 
-                      <div className="flex gap-2 ml-4">
-                        <Button size="sm" variant="outline">
-                          <Eye className="h-4 w-4" />
+                      <div className="flex flex-col gap-2 ml-4">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
+                          onClick={() => openRouterConfig(location.id)}
+                        >
+                          <Wrench className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="outline">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
+                        >
                           <Edit3 className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="outline">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="bg-gray-800 border-gray-600 text-white hover:bg-red-700"
+                          onClick={() => handleDeleteLocation(location.id)}
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -336,63 +804,78 @@ export default function HotspotManagementPage() {
         </div>
 
         {/* Add Location Modal */}
+        <AnimatePresence>
         {showAddLocation && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-lg w-full max-w-md"
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-gray-900 rounded-lg w-full max-w-md border border-gray-700"
             >
               <div className="p-6">
-                <h3 className="text-lg font-semibold mb-4">Add New Hotspot Location</h3>
+                  <h3 className="text-lg font-semibold mb-4 text-white">Add New Hotspot Location</h3>
                 <form onSubmit={handleAddLocation} className="space-y-4">
                   <div>
-                    <Label htmlFor="locationId">Location ID</Label>
+                      <Label htmlFor="locationId" className="text-gray-300">Location ID</Label>
                     <Input
                       id="locationId"
                       value={newLocation.id}
                       onChange={(e) => setNewLocation({...newLocation, id: e.target.value.toLowerCase().replace(/\s+/g, '-')})}
                       placeholder="e.g., kano, port-harcourt"
                       required
+                        className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="locationName">Location Name</Label>
+                      <Label htmlFor="locationName" className="text-gray-300">Location Name</Label>
                     <Input
                       id="locationName"
                       value={newLocation.name}
                       onChange={(e) => setNewLocation({...newLocation, name: e.target.value})}
                       placeholder="e.g., Kano"
                       required
+                        className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="displayName">Display Name</Label>
+                      <Label htmlFor="displayName" className="text-gray-300">Display Name</Label>
                     <Input
                       id="displayName"
-                      value={newLocation.displayName}
-                      onChange={(e) => setNewLocation({...newLocation, displayName: e.target.value})}
+                        value={newLocation.display_name}
+                        onChange={(e) => setNewLocation({...newLocation, display_name: e.target.value})}
                       placeholder="e.g., PHSWEB Kano Branch"
                       required
+                        className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="city" className="text-gray-300">City</Label>
+                      <Input
+                        id="city"
+                        value={newLocation.city}
+                        onChange={(e) => setNewLocation({...newLocation, city: e.target.value})}
+                        placeholder="e.g., Kano"
+                        className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="routerIp">MikroTik Router IP</Label>
+                      <Label htmlFor="state" className="text-gray-300">State</Label>
                     <Input
-                      id="routerIp"
-                      value={newLocation.routerIp}
-                      onChange={(e) => setNewLocation({...newLocation, routerIp: e.target.value})}
-                      placeholder="e.g., 192.168.1.1"
-                      required
+                        id="state"
+                        value={newLocation.state}
+                        onChange={(e) => setNewLocation({...newLocation, state: e.target.value})}
+                        placeholder="e.g., Kano"
+                        className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
                     />
                   </div>
                   <div className="flex gap-3 pt-4">
-                    <Button type="submit" className="flex-1">Add Location</Button>
+                      <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700">Add Location</Button>
                     <Button 
                       type="button" 
                       variant="outline" 
                       onClick={() => setShowAddLocation(false)}
-                      className="flex-1"
+                        className="flex-1 bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
                     >
                       Cancel
                     </Button>
@@ -402,27 +885,164 @@ export default function HotspotManagementPage() {
             </motion.div>
           </div>
         )}
+        </AnimatePresence>
+
+        {/* Router Configuration Modal */}
+        <AnimatePresence>
+          {showRouterConfig && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-gray-900 rounded-lg w-full max-w-lg border border-gray-700"
+              >
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-white">Router Configuration</h3>
+                    <div className="flex items-center gap-2">
+                      {locations.find(l => l.id === showRouterConfig)?.routerConfig && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => testConnection(
+                            showRouterConfig!, 
+                            locations.find(l => l.id === showRouterConfig)!.routerConfig!
+                          )}
+                          disabled={isTestingConnection === showRouterConfig}
+                          className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
+                        >
+                          <TestTube className="h-4 w-4 mr-1" />
+                          Test Connection
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-400 mb-4">
+                    Configure MikroTik router for location: {locations.find(l => l.id === showRouterConfig)?.display_name}
+                  </p>
+                  <form onSubmit={handleSaveRouterConfig} className="space-y-4">
+                    <div>
+                      <Label htmlFor="routerHost" className="text-gray-300">Router IP/Host</Label>
+                      <Input
+                        id="routerHost"
+                        value={routerConfig.host}
+                        onChange={(e) => setRouterConfig({...routerConfig, host: e.target.value})}
+                        placeholder="e.g., 192.168.1.1"
+                        required
+                        className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="routerUsername" className="text-gray-300">Username</Label>
+                      <Input
+                        id="routerUsername"
+                        value={routerConfig.username}
+                        onChange={(e) => setRouterConfig({...routerConfig, username: e.target.value})}
+                        placeholder="e.g., admin"
+                        required
+                        className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="routerPassword" className="text-gray-300">Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="routerPassword"
+                          type={showPassword ? "text" : "password"}
+                          value={routerConfig.password}
+                          onChange={(e) => setRouterConfig({...routerConfig, password: e.target.value})}
+                          placeholder="Enter router password"
+                          required
+                          className="bg-gray-800 border-gray-600 text-white placeholder-gray-400 pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="connectionType" className="text-gray-300">Connection Type</Label>
+                      <select 
+                        id="connectionType"
+                        value={routerConfig.connection_type} 
+                        onChange={(e) => setRouterConfig({...routerConfig, connection_type: e.target.value as 'api' | 'ssh' | 'winbox'})}
+                        className="flex h-10 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="api">API (Recommended)</option>
+                        <option value="ssh">SSH</option>
+                        <option value="winbox">Winbox</option>
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label htmlFor="routerPort" className="text-gray-300">API Port</Label>
+                        <Input
+                          id="routerPort"
+                          type="number"
+                          value={routerConfig.port}
+                          onChange={(e) => setRouterConfig({...routerConfig, port: parseInt(e.target.value)})}
+                          placeholder="8728"
+                          className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="routerApiPort" className="text-gray-300">HTTP Port</Label>
+                        <Input
+                          id="routerApiPort"
+                          type="number"
+                          value={routerConfig.api_port}
+                          onChange={(e) => setRouterConfig({...routerConfig, api_port: parseInt(e.target.value)})}
+                          placeholder="80"
+                          className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-3 pt-4">
+                      <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700">
+                        <Save className="h-4 w-4 mr-2" />
+                        Save Configuration
+                      </Button>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => setShowRouterConfig(null)}
+                        className="flex-1 bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* Integration Instructions */}
         <div className="mt-12">
-          <Card>
+          <Card className="bg-gray-900/80 border-gray-700">
             <CardHeader>
-              <h3 className="text-lg font-semibold">MikroTik Integration Instructions</h3>
+              <h3 className="text-lg font-semibold text-white">MikroTik Integration Instructions</h3>
             </CardHeader>
             <CardContent>
               <div className="space-y-4 text-sm">
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-2">1. Configure Walled Garden</h4>
-                  <p className="text-gray-600 mb-2">Add your domain to MikroTik&apos;s walled garden:</p>
-                  <code className="bg-gray-100 px-2 py-1 rounded text-xs block">
+                  <h4 className="font-medium text-white mb-2">1. Configure Walled Garden</h4>
+                  <p className="text-gray-300 mb-2">Add your domain to MikroTik&apos;s walled garden:</p>
+                  <code className="bg-gray-800 px-2 py-1 rounded text-xs block text-gray-300">
                     /ip hotspot walled-garden add dst-host=yourdomain.com action=allow
                   </code>
                 </div>
                 
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-2">2. Update login.html</h4>
-                  <p className="text-gray-600 mb-2">Replace the content of your MikroTik&apos;s login.html file:</p>
-                  <code className="bg-gray-100 px-2 py-1 rounded text-xs block whitespace-pre-wrap">
+                  <h4 className="font-medium text-white mb-2">2. Update login.html</h4>
+                  <p className="text-gray-300 mb-2">Replace the content of your MikroTik&apos;s login.html file:</p>
+                  <code className="bg-gray-800 px-2 py-1 rounded text-xs block whitespace-pre-wrap text-gray-300">
 {`<!DOCTYPE html>
 <html>
 <head>
@@ -436,8 +1056,8 @@ export default function HotspotManagementPage() {
                 </div>
 
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-2">3. Replace LOCATION_ID</h4>
-                  <p className="text-gray-600">Replace LOCATION_ID with the actual location ID (e.g., awka, lagos, abuja) for each router.</p>
+                  <h4 className="font-medium text-white mb-2">3. Replace LOCATION_ID</h4>
+                  <p className="text-gray-300">Replace LOCATION_ID with the actual location ID (e.g., awka, lagos, abuja) for each router.</p>
                 </div>
               </div>
             </CardContent>
