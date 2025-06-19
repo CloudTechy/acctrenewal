@@ -548,32 +548,53 @@ export async function getOwnerCommissions(
   }
 }
 
-export async function getOwnerStats(ownerId: string): Promise<CommissionSummary> {
+export async function getOwnerStats(ownerId: string, startDate?: string, endDate?: string): Promise<CommissionSummary & { monthlyCommissions: number; activeCustomers: number }> {
   try {
-    const { data, error } = await supabaseAdmin
+    // Get ALL transactions for this owner (no date filter for totals)
+    const { data: allTransactions, error: allError } = await supabaseAdmin
       .from('renewal_transactions')
-      .select('amount_paid, commission_amount, payment_status')
+      .select('amount_paid, commission_amount, payment_status, username, created_at')
       .eq('account_owner_id', ownerId)
 
-    if (error) {
-      console.error('Error fetching owner stats:', error)
+    if (allError) {
+      console.error('Error fetching all owner transactions:', allError)
       return {
         total_commissions: 0,
         total_transactions: 0,
         pending_amount: 0,
-        completed_amount: 0
+        completed_amount: 0,
+        monthlyCommissions: 0,
+        activeCustomers: 0
       }
     }
 
-    const transactions = data || []
-    const completed = transactions.filter(t => t.payment_status === 'success')
-    const pending = transactions.filter(t => t.payment_status === 'pending')
+    // Get transactions for the specific period if dates provided
+    let periodTransactions = allTransactions || []
+    
+    if (startDate || endDate) {
+      periodTransactions = (allTransactions || []).filter(t => {
+        const transactionDate = new Date(t.created_at)
+        const isAfterStart = !startDate || transactionDate >= new Date(startDate)
+        const isBeforeEnd = !endDate || transactionDate <= new Date(endDate)
+        return isAfterStart && isBeforeEnd
+      })
+    }
+
+    // Calculate stats for all time
+    const completedAll = (allTransactions || []).filter(t => t.payment_status === 'success')
+    const pendingAll = (allTransactions || []).filter(t => t.payment_status === 'pending')
+
+    // Calculate stats for the period
+    const completedPeriod = periodTransactions.filter(t => t.payment_status === 'success')
+    const uniqueCustomers = new Set(periodTransactions.map(t => t.username)).size
 
     return {
-      total_commissions: completed.reduce((sum, t) => sum + t.commission_amount, 0),
-      total_transactions: transactions.length,
-      pending_amount: pending.reduce((sum, t) => sum + t.commission_amount, 0),
-      completed_amount: completed.reduce((sum, t) => sum + t.commission_amount, 0)
+      total_commissions: completedAll.reduce((sum, t) => sum + (Number(t.commission_amount) || 0), 0),
+      total_transactions: (allTransactions || []).length,
+      pending_amount: pendingAll.reduce((sum, t) => sum + (Number(t.commission_amount) || 0), 0),
+      completed_amount: completedAll.reduce((sum, t) => sum + (Number(t.commission_amount) || 0), 0),
+      monthlyCommissions: completedPeriod.reduce((sum, t) => sum + (Number(t.commission_amount) || 0), 0),
+      activeCustomers: uniqueCustomers
     }
   } catch (error) {
     console.error('Exception in getOwnerStats:', error)
@@ -581,7 +602,9 @@ export async function getOwnerStats(ownerId: string): Promise<CommissionSummary>
       total_commissions: 0,
       total_transactions: 0,
       pending_amount: 0,
-      completed_amount: 0
+      completed_amount: 0,
+      monthlyCommissions: 0,
+      activeCustomers: 0
     }
   }
 }
