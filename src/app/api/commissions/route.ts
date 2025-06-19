@@ -16,8 +16,16 @@ export async function GET(request: NextRequest) {
     const commissions = await getOwnerCommissions(ownerId, startDate || undefined, endDate || undefined)
     
     // Get owner statistics
-    const stats = await getOwnerStats(ownerId)
-
+    const dbStats = await getOwnerStats(ownerId, startDate || undefined, endDate || undefined)
+    
+    // Map snake_case to camelCase for frontend
+    const stats = {
+      totalCommissions: dbStats.total_commissions,
+      totalTransactions: dbStats.total_transactions,
+      monthlyCommissions: dbStats.monthlyCommissions,
+      activeCustomers: dbStats.activeCustomers
+    }
+    
     return NextResponse.json({
       success: true,
       data: {
