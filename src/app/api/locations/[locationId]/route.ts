@@ -41,7 +41,24 @@ export async function PUT(
   try {
     const { locationId } = await params
     const body = await request.json()
-    const { name, display_name, description, address, city, state, status } = body
+    const { 
+      name, 
+      display_name, 
+      description, 
+      address, 
+      city, 
+      state, 
+      status,
+      group_id,
+      default_owner_id,
+      registration_enabled,
+      welcome_message,
+      brand_color_primary,
+      brand_color_secondary,
+      contact_phone,
+      contact_email,
+      features
+    } = body
 
     const updateData: Partial<HotspotLocation> = {}
     if (name) updateData.name = name
@@ -51,6 +68,15 @@ export async function PUT(
     if (city !== undefined) updateData.city = city
     if (state !== undefined) updateData.state = state
     if (status) updateData.status = status
+    if (group_id !== undefined) updateData.group_id = group_id
+    if (default_owner_id !== undefined) updateData.default_owner_id = default_owner_id
+    if (registration_enabled !== undefined) updateData.registration_enabled = registration_enabled
+    if (welcome_message !== undefined) updateData.welcome_message = welcome_message
+    if (brand_color_primary !== undefined) updateData.brand_color_primary = brand_color_primary
+    if (brand_color_secondary !== undefined) updateData.brand_color_secondary = brand_color_secondary
+    if (contact_phone !== undefined) updateData.contact_phone = contact_phone
+    if (contact_email !== undefined) updateData.contact_email = contact_email
+    if (features !== undefined) updateData.features = features
 
     const location = await updateHotspotLocation(locationId, updateData)
 

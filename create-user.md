@@ -1,249 +1,216 @@
-# Create User Implementation Task List
+# PHSWEB Hotspot Management System - Development Documentation
 
-## Overview
-This document outlines the implementation steps for enhancing the hotspot user registration system with location-based group ID and owner assignment, plus fixing the expiry date validation issue.
+## Project Overview
+This document tracks the development progress of PHSWEB's comprehensive hotspot management system, transforming from mock data to real-time MikroTik router integration with user registration capabilities.
 
-## Current Issues Identified
-1. **Expiry Date Error**: "Expiry date is invalid!" - API expects date format but we're not sending expiry parameter
-2. **Missing Location Context**: Registration form doesn't capture location information
-3. **Missing Group ID**: No group ID assignment based on location
-4. **Missing Owner Assignment**: No owner assignment for commission tracking
+### Technology Stack
+- **Frontend**: Next.js 15.3.3, React 18, TypeScript, Tailwind CSS, Framer Motion
+- **Backend**: Next.js API Routes, Supabase PostgreSQL
+- **Router Integration**: node-routeros package for MikroTik API
+- **Authentication**: Supabase Auth
+- **Payments**: Paystack integration
 
-## Required Database Schema Changes
+---
 
-### 1. Extend `hotspot_locations` Table
-```sql
-ALTER TABLE hotspot_locations ADD COLUMN group_id INTEGER;
-ALTER TABLE hotspot_locations ADD COLUMN default_owner_id UUID REFERENCES account_owners(id);
-ALTER TABLE hotspot_locations ADD COLUMN registration_enabled BOOLEAN DEFAULT true;
-```
+## Development Phases
 
-### 2. Update Sample Data
-```sql
--- Add group IDs and default owners for existing locations
-UPDATE hotspot_locations SET group_id = 1, default_owner_id = (SELECT id FROM account_owners LIMIT 1) WHERE id = 'awka';
-```
+### Phase 1: Database Schema Extensions ✅
+**File**: `database-schema.sql`
+- [x] **Extended customers table** with hotspot-specific fields
+- [x] **Added location tracking** with `location_id` foreign key
+- [x] **Implemented hotspot user flag** with `is_hotspot_user` boolean
+- [x] **Enhanced address fields** for customer location data
+- [x] **Added timestamps** for registration tracking
 
-## Implementation Tasks
+### Phase 2: Password Generation & Security ✅
+**File**: `src/lib/password-utils.ts`
+- [x] **Secure password generation** using crypto.randomBytes
+- [x] **Human-readable formatting** with hyphens for user experience
+- [x] **Configurable complexity** (8-character alphanumeric by default)
+- [x] **Display formatting utilities** for consistent UI presentation
 
-### Phase 1: Database & API Layer Updates
+### Phase 3: Frontend Location Management ✅
+**Files**: `src/app/hotspot/page.tsx`, `src/lib/database.ts`
+- [x] **Real-time location dashboard** with MikroTik router integration
+- [x] **Router connection testing** with live status indicators
+- [x] **Add/Edit location functionality** with form validation
+- [x] **Router configuration management** with secure credential storage
+- [x] **Live stats display** showing active users and connection status
 
-#### Task 1.1: Update Database Schema
-- [ ] Create migration file for `hotspot_locations` table extensions
-- [ ] Add `group_id` column (INTEGER)
-- [ ] Add `default_owner_id` column (UUID, FK to account_owners)
-- [ ] Add `registration_enabled` column (BOOLEAN, default true)
-- [ ] Update existing location data with default values
+### Phase 4: Registration System Enhancement ✅
+**Files**: `src/app/hotspot/register/page.tsx`, `src/app/api/radius/register-user/route.ts`
+- [x] **Multi-step registration form** with smooth animations
+- [x] **Service plan integration** with dynamic pricing
+- [x] **Location-based registration** with URL parameter support
+- [x] **Real-time form validation** with error handling
+- [x] **Database integration** for customer storage
 
-#### Task 1.2: Update Database Interface Functions
-**File**: `src/lib/database.ts`
-- [ ] Update `HotspotLocation` interface to include new fields
-- [ ] Modify `createHotspotLocation()` to handle new fields
-- [ ] Modify `updateHotspotLocation()` to handle new fields
-- [ ] Add `getLocationWithOwner()` function to fetch location with owner details
+### Phase 5: User Display Analytics Fix ✅
+**Problem**: Dashboard showed "Total Users: 0" despite having registered customers
+**Root Cause**: API was fetching active router users (0) vs database registered users
+**Solution**: 
+- [x] **Separated metrics**: "Active Users" (from router) vs "Registered Customers" (from database)
+- [x] **Enhanced API response**: Added both router stats and database counts
+- [x] **Fixed dashboard display**: Clear distinction between live users and total registrations
+- [x] **Removed duplicate metrics**: Eliminated confusing "Total Registered Users" vs "Hotspot Customers"
 
-#### Task 1.3: Create Owner Management API
-**File**: `src/app/api/owners/route.ts` (already exists, verify functionality)
-- [ ] Ensure GET endpoint returns all active account owners
-- [ ] Verify response format for dropdown population
+### Phase 6: API Response Structure Enhancement ✅
+**Files**: `src/app/api/hotspot/stats/route.ts`
+- [x] **Comprehensive error handling** for router connection failures
+- [x] **Fallback data provision** when routers are offline
+- [x] **Structured response format** with consistent error messaging
+- [x] **Performance optimization** with parallel data fetching
 
-### Phase 2: Frontend Location Management Updates
+### Phase 7: Service Plan Integration ✅
+**Files**: `src/app/api/radius/service-plans/route.ts`, registration components
+- [x] **Dynamic service plan loading** from Radius Manager database
+- [x] **Plan selection interface** with pricing and feature display
+- [x] **Integration with registration flow** for seamless user experience
+- [x] **Error handling** for service plan API failures
 
-#### Task 2.1: Update Add Location Form
+### Phase 8: Database Integration for Commission Tracking ✅
+**Files**: Database schema, commission tracking APIs
+- [x] **Account owner management** with commission rate tracking
+- [x] **Location-owner relationship** for proper commission attribution
+- [x] **Registration attribution** linking customers to account owners
+- [x] **Commission calculation foundation** for future payment processing
+
+### Phase 9: Security & Business Logic Fixes ✅
+
+#### Task 9.1: PostgreSQL Security Fix
+**Files**: `database-schema.sql`, `database-hotspot-schema.sql`
+- [x] **Fixed "Function Search Path Mutable" warning** in Supabase
+- [x] **Added `SET search_path = ''`** to `update_updated_at_column` function
+- [x] **Prevented potential SQL injection** via search_path manipulation
+- [x] **Enhanced database security** following PostgreSQL best practices
+
+#### Task 9.2: Critical Hotspot Expiry Logic Fix
+**Problem**: New registrations getting 30-day expiry instead of respecting service plan duration
+**Root Cause**: Registration API used `|| 30` fallback instead of respecting exact service plan settings
+**Files**: `src/app/api/radius/register-user/route.ts`, `src/lib/date-utils.ts`
+
+**Business Logic Investigation**:
+- **"HOTSPOT 10GB 15 DAYS (N1000)"** (srvid: 37): `timeunitexp: "15"` → Should get 15 days ✅
+- **"HOTSPOT 4.5GB 5DAYS (N500)"** (srvid: 38): `timeunitexp: "0"` → Should get 0 days (data-only plan) ✅
+
+**Final Solution**:
+- [x] **Trial Registration**: Accounts expire at **00:00:00 of current day** (immediate expiry)
+- [x] **Service Plan Respect**: Exact duration from `timeunitexp` field (including 0 for data-only)
+- [x] **Fixed Condition**: Changed from `servicePlan.timeunitexp` to `servicePlan.timeunitexp !== undefined`
+- [x] **Data-Only Support**: Uses `planDays >= 0` to allow 0-day plans
+- [x] **Business Consistency**: Same logic as existing renewal system
+
+**Expected Behavior**:
+- **Trial Registration**: Gets **00:00:00 of current day** (immediate expiry, requires purchase)
+- **15-day Plan**: Gets 15 days + 10GB data
+- **Data-only Plan**: Gets **0 days + 4.5GB data** (no time extension)
+- **30-day Plan**: Gets 30 days + unlimited features
+
+### Phase 10: Edit Location Functionality ✅
+
+#### Task 10.1: Enhanced Location Management
 **File**: `src/app/hotspot/page.tsx`
-- [ ] Add Group ID input field (number input)
-- [ ] Add Owner selection dropdown (populated from `/api/owners`)
-- [ ] Add Registration Enabled toggle
-- [ ] Update form validation
-- [ ] Update `handleAddLocation()` to include new fields
+- [x] **Added Edit Location Modal**: Complete edit functionality for all location fields
+- [x] **Editable Fields**: Group ID, Account Owner, Hotspot Registration Toggle, and all basic location info
+- [x] **Real-time Updates**: Changes reflect immediately in the dashboard after saving
+- [x] **Form Validation**: Proper validation for required fields and data types
+- [x] **State Management**: Separate edit state to prevent conflicts with add location
 
-#### Task 2.2: Update Location Display
-**File**: `src/app/hotspot/page.tsx`
-- [ ] Display group ID in location cards
-- [ ] Display assigned owner name in location cards
-- [ ] Show registration status (enabled/disabled)
-- [ ] Add edit functionality for location settings
+#### Task 10.2: Enhanced API Support
+**File**: `src/app/api/locations/[locationId]/route.ts`
+- [x] **Extended PUT Method**: Added support for `group_id`, `default_owner_id`, and `registration_enabled` fields
+- [x] **Backward Compatibility**: Existing fields continue to work as before
+- [x] **Proper Validation**: Only updates fields that are provided in the request
 
-### Phase 3: Registration System Enhancement
+#### Task 10.3: Business Functionality
+- [x] **Group ID Management**: Can change Radius Manager group assignment for new registrations
+- [x] **Owner Reassignment**: Can change commission tracking owner for the location
+- [x] **Hotspot Toggle**: Can enable/disable hotspot registration without affecting router connection
+- [x] **Immediate Effect**: Changes take effect for new registrations immediately
 
-#### Task 3.1: Add Location Context to Registration
-**File**: `src/app/hotspot/[locationId]/page.tsx`
-- [ ] Pass location ID to registration page via URL parameter
-- [ ] Update "Create Hotspot Account" button to include location context
-- [ ] Modify registration link: `/hotspot/register?location=${locationId}`
+### Key Features Implemented ✅
+1. **Edit Button Functionality**: Previously non-functional edit button now opens edit modal
+2. **Complete Field Editing**: All location fields are editable including hotspot-specific settings
+3. **Group ID Changes**: Can reassign users to different Radius Manager groups
+4. **Owner Changes**: Can reassign locations to different account owners for commission tracking
+5. **Hotspot Toggle**: Can disable hotspot landing page while keeping router operational
+6. **Validation**: Proper form validation and error handling
+7. **UI/UX**: Consistent design with add location modal, smooth animations
 
-#### Task 3.2: Update Registration Page
-**File**: `src/app/hotspot/register/page.tsx`
-- [ ] Extract location ID from URL parameters
-- [ ] Fetch location details including group_id and owner
-- [ ] Display location-specific branding/information
-- [ ] Pass location context through registration flow
-- [ ] Update registration data state to include location info
+### Business Impact ✅
+- **Operational Flexibility**: Can quickly adjust location settings without recreating
+- **Commission Management**: Easy owner reassignment for business restructuring  
+- **Router Control**: Independent control of hotspot service vs router connectivity
+- **Group Management**: Dynamic user group assignment for different service tiers
+- **Real-time Changes**: No system restart required for configuration changes
 
-#### Task 3.3: Fix Expiry Date Issue
-**File**: `src/app/api/radius/register-user/route.ts`
-- [ ] Add expiry date calculation (current date + service plan duration)
-- [ ] Format expiry date correctly for Radius Manager API
-- [ ] Add `groupid` parameter from location data
-- [ ] Add `owner` parameter from location data
-- [ ] Update URL construction with new parameters
+---
 
-### Phase 4: API Endpoints Enhancement
+## System Architecture
 
-#### Task 4.1: Create Location Details API
-**File**: `src/app/api/locations/[locationId]/details/route.ts`
-- [ ] Create new endpoint to fetch location with owner details
-- [ ] Include group_id, owner information, and registration settings
-- [ ] Used by registration page to get location context
+### Database Design
+- **PostgreSQL with Supabase**: Scalable cloud database with real-time capabilities
+- **Foreign Key Relationships**: Proper data integrity between customers, locations, and owners
+- **Audit Trails**: Timestamp tracking for all major operations
+- **Security**: Row-level security policies and secure function definitions
 
-#### Task 4.2: Update Registration API
-**File**: `src/app/api/radius/register-user/route.ts`
-- [ ] Accept `locationId` parameter in request body
-- [ ] Fetch location details including group_id and owner
-- [ ] Calculate proper expiry date based on service plan
-- [ ] Include all required parameters in Radius Manager API call:
-  - `groupid` (from location)
-  - `owner` (from location)
-  - `expiry` (calculated date in YYYY-MM-DD format)
+### API Architecture
+- **RESTful Design**: Consistent endpoint structure across all APIs
+- **Error Handling**: Comprehensive error responses with proper HTTP status codes
+- **Data Validation**: Input sanitization and validation at API level
+- **Performance**: Optimized queries and caching strategies
 
-### Phase 5: Service Plan Integration
+### Frontend Architecture
+- **Component-Based**: Reusable React components with TypeScript
+- **State Management**: React hooks for local state, API calls for server state
+- **Responsive Design**: Mobile-first approach with Tailwind CSS
+- **User Experience**: Smooth animations and loading states with Framer Motion
 
-#### Task 5.1: Update Service Plans API
-**File**: `src/app/api/radius/service-plans/route.ts`
-- [ ] Ensure service plans include duration information
-- [ ] Add plan duration to response for expiry calculation
+### Integration Points
+- **MikroTik RouterOS API**: Direct router management via node-routeros
+- **Radius Manager Database**: Service plan and user management integration
+- **Paystack Payment Gateway**: Secure payment processing for renewals
+- **Real-time Updates**: Live dashboard updates without page refresh
 
-#### Task 5.2: Expiry Date Calculation Logic
-**File**: `src/app/api/radius/register-user/route.ts`
-- [ ] Create utility function to calculate expiry date
-- [ ] Handle different service plan durations (days/months)
-- [ ] Format date as YYYY-MM-DD HH:MM:SS or YYYY-MM-DD based on API requirements
+---
 
-### Phase 6: Database Integration for Commission Tracking
+## Business Logic Summary
 
-#### Task 6.1: Create Customer Record
-**File**: `src/app/api/radius/register-user/route.ts`
-- [ ] After successful Radius Manager registration, create customer record
-- [ ] Link customer to account owner for commission tracking
-- [ ] Store location information for analytics
+### Registration Flow
+1. **Location Selection**: Users register via location-specific URLs
+2. **Service Plan Choice**: Dynamic loading of available plans with pricing
+3. **User Information**: Multi-step form with validation
+4. **Account Creation**: Database storage with proper attribution
+5. **Router Integration**: User creation in MikroTik system
+6. **Commission Tracking**: Automatic owner attribution for business analytics
 
-#### Task 6.2: Update Customer Database Functions
-**File**: `src/lib/database.ts`
-- [ ] Add `createCustomerFromRegistration()` function
-- [ ] Link to account owner and location
-- [ ] Store registration source as 'hotspot_registration'
+### User Management
+- **Trial Access**: Immediate access with 00:00:00 expiry (requires purchase)
+- **Service Plans**: Exact duration and data allocation as configured
+- **Group Assignment**: Automatic Radius Manager group assignment
+- **Owner Attribution**: Commission tracking for business operations
 
-## Implementation Details
+### System Administration
+- **Location Management**: Full CRUD operations with real-time updates
+- **Router Configuration**: Secure credential management and connection testing
+- **Analytics Dashboard**: Live statistics and performance monitoring
+- **Error Handling**: Comprehensive logging and user-friendly error messages
 
-### Expiry Date Format Research
-Based on the DMA API documentation found, the expiry format should be:
-- Format: `YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS`
-- Example: `2024-11-03` or `2024-11-03 20:00:00`
+---
 
-### Group ID and Owner Parameters
-- `groupid`: Integer value representing the user group
-- `owner`: String value representing the account owner username
+## Next Development Priorities
 
-### API URL Construction Example
-```javascript
-const params = new URLSearchParams({
-  apiuser: apiUser,
-  apipass: apiPass,
-  q: 'new_user',
-  username,
-  password,
-  enabled: enabled.toString(),
-  acctype: acctype.toString(),
-  srvid,
-  groupid: locationData.group_id.toString(),
-  owner: locationData.owner_username,
-  expiry: calculateExpiryDate(selectedPlan),
-  firstname,
-  lastname,
-  email,
-  phone: phone || username,
-  ...(address && { address }),
-  ...(city && { city }),
-  ...(state && { state })
-});
-```
+1. **Customer Portal**: Self-service account management
+2. **Payment Integration**: Automated renewal and upgrade flows
+3. **Advanced Analytics**: Detailed usage reports and business intelligence
+4. **Mobile App**: Native mobile application for customer access
+5. **API Documentation**: Comprehensive API documentation for third-party integrations
 
-### Expiry Date Calculation Function
-```javascript
-function calculateExpiryDate(servicePlan) {
-  const now = new Date();
-  const expiryDate = new Date(now);
-  
-  // Add service plan duration (assuming duration is in days)
-  expiryDate.setDate(now.getDate() + (servicePlan.duration || 30));
-  
-  // Format as YYYY-MM-DD HH:MM:SS
-  return expiryDate.toISOString().slice(0, 19).replace('T', ' ');
-}
-```
+---
 
-## Testing Plan
-
-### Phase 7: Testing & Validation
-
-#### Task 7.1: Database Testing
-- [ ] Test location creation with new fields
-- [ ] Verify owner dropdown population
-- [ ] Test location updates
-
-#### Task 7.2: Registration Flow Testing
-- [ ] Test registration with location context
-- [ ] Verify group ID and owner assignment
-- [ ] Test expiry date calculation
-- [ ] Validate Radius Manager API integration
-
-#### Task 7.3: Integration Testing
-- [ ] Test complete flow from location selection to user creation
-- [ ] Verify commission tracking database entries
-- [ ] Test error handling and validation
-
-## File Summary
-
-### Files to Modify:
-1. `src/lib/database.ts` - Database functions and interfaces
-2. `src/app/hotspot/page.tsx` - Location management dashboard
-3. `src/app/hotspot/[locationId]/page.tsx` - Individual login pages
-4. `src/app/hotspot/register/page.tsx` - Registration form
-5. `src/app/api/radius/register-user/route.ts` - Registration API
-6. `src/app/api/locations/[locationId]/route.ts` - Location details API
-
-### Files to Create:
-1. `src/app/api/locations/[locationId]/details/route.ts` - Location with owner details
-2. Database migration file for schema updates
-
-## Priority Order
-
-1. **High Priority**: Fix expiry date issue (immediate business impact)
-2. **High Priority**: Add location context to registration
-3. **Medium Priority**: Update location management with group ID and owner
-4. **Medium Priority**: Implement commission tracking integration
-5. **Low Priority**: Enhanced UI and validation
-
-## Estimated Timeline
-
-- **Phase 1-2**: 2-3 days (Database and location management)
-- **Phase 3**: 2-3 days (Registration system updates)
-- **Phase 4**: 1-2 days (API enhancements)
-- **Phase 5-6**: 2-3 days (Service plan integration and commission tracking)
-- **Phase 7**: 1-2 days (Testing and validation)
-
-**Total Estimated Time**: 8-13 days
-
-## Dependencies
-
-1. Access to Radius Manager API documentation for parameter validation
-2. Service plan duration information from Radius Manager
-3. Account owners data populated in database
-4. Testing environment with MikroTik router integration
-
-## Notes
-
-- The expiry date issue should be addressed first as it's blocking user registration
-- Location context is critical for proper group ID and owner assignment
-- Commission tracking integration will enable proper business analytics
-- All changes should maintain backward compatibility with existing locations 
+**PHASE 10 COMPLETED ✅**
+- **Full Edit Functionality**: All location settings now editable via intuitive modal interface
+- **Enhanced Business Control**: Complete management of group IDs, owners, and hotspot registration
+- **Improved Operations**: Streamlined location management without system downtime
+- **API Enhancement**: Extended backend support for all new editable fields
+- **User Experience**: Consistent design language and smooth user interactions 

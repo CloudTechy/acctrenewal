@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Phone, 
@@ -14,14 +14,16 @@ import {
   Wifi,
   Clock,
   Download,
-  Upload
+  Upload,
+  MapPin
 } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { generateHotspotPassword, formatPasswordForDisplay } from '@/lib/password-utils';
 
 interface ServicePlan {
   srvid: string;
@@ -33,6 +35,23 @@ interface ServicePlan {
   limituptime: string;
   unitprice: string;
   timebaseexp: string;
+  timeunitexp: string;
+}
+
+interface LocationDetails {
+  id: string;
+  name: string;
+  display_name: string;
+  city?: string;
+  state?: string;
+  group_id?: number;
+  default_owner_id?: string;
+  registration_enabled?: boolean;
+  owner?: {
+    id: string;
+    name: string;
+    owner_username: string;
+  };
 }
 
 interface RegistrationData {
@@ -45,6 +64,7 @@ interface RegistrationData {
   state: string;
   serviceId: string;
   password: string;
+  locationId: string;
 }
 
 const steps = [
@@ -54,12 +74,14 @@ const steps = [
   { id: 4, title: 'Confirmation', icon: Check, description: 'Review and confirm' }
 ];
 
-export default function HotspotRegisterPage() {
+function HotspotRegisterContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [servicePlans, setServicePlans] = useState<ServicePlan[]>([]);
+  const [locationDetails, setLocationDetails] = useState<LocationDetails | null>(null);
   const [registrationData, setRegistrationData] = useState<RegistrationData>({
     phone: '',
     firstName: '',
@@ -69,21 +91,44 @@ export default function HotspotRegisterPage() {
     city: '',
     state: '',
     serviceId: '',
-    password: ''
+    password: '',
+    locationId: searchParams.get('location') || ''
   });
 
-  // Generate random password
+  // Fetch location details when component mounts
   useEffect(() => {
-    const generatePassword = () => {
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-      let password = '';
-      for (let i = 0; i < 8; i++) {
-        password += chars.charAt(Math.floor(Math.random() * chars.length));
+    const locationId = searchParams.get('location');
+    if (locationId) {
+      setRegistrationData(prev => ({ ...prev, locationId }));
+      fetchLocationDetails(locationId);
+    }
+  }, [searchParams]);
+
+  // Fetch location details including owner information
+  const fetchLocationDetails = async (locationId: string) => {
+    try {
+      const response = await fetch(`/api/locations/${locationId}/details`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setLocationDetails(data.location);
+        
+        // Check if registration is enabled for this location
+        if (!data.location.registration_enabled) {
+          setError('Registration is currently disabled for this location. Please contact support.');
+        }
+      } else {
+        setError('Location not found or invalid.');
       }
-      return password;
-    };
-    
-    setRegistrationData(prev => ({ ...prev, password: generatePassword() }));
+    } catch (err) {
+      console.error('Error fetching location details:', err);
+      setError('Failed to load location information.');
+    }
+  };
+
+  // Generate random 4-digit password
+  useEffect(() => {
+    setRegistrationData(prev => ({ ...prev, password: generateHotspotPassword() }));
   }, []);
 
   // Fetch service plans when reaching step 3
@@ -156,8 +201,7 @@ export default function HotspotRegisterPage() {
           state: registrationData.state,
           phone: registrationData.phone,
           srvid: registrationData.serviceId,
-          enabled: 1,
-          acctype: 0
+          locationId: registrationData.locationId
         })
       });
       
@@ -166,16 +210,18 @@ export default function HotspotRegisterPage() {
       if (data.success) {
         setCurrentStep(4);
       } else {
-        setError('Registration failed. Please try again.');
+        setError(data.error || 'Registration failed');
       }
     } catch {
-      setError('Error during registration');
+      setError('Error creating account');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleNext = () => {
+    setError(null);
+    
     if (currentStep === 1) {
       if (!registrationData.phone) {
         setError('Please enter your phone number');
@@ -205,15 +251,18 @@ export default function HotspotRegisterPage() {
   };
 
   const formatCurrency = (amount: string) => {
-    return new Intl.NumberFormat('en-NG', {
-      style: 'currency',
-      currency: 'NGN'
-    }).format(parseInt(amount) || 0);
+    const num = parseFloat(amount);
+    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(num);
   };
 
   const formatSpeed = (speed: string) => {
-    const mbps = parseInt(speed) / 1000000;
-    return `${mbps} Mbps`;
+    const speedNum = parseInt(speed);
+    if (speedNum >= 1000000) {
+      return `${(speedNum / 1000000).toFixed(1)}M`;
+    } else if (speedNum >= 1000) {
+      return `${(speedNum / 1000).toFixed(1)}K`;
+    }
+    return `${speedNum}`;
   };
 
   return (
@@ -245,8 +294,28 @@ export default function HotspotRegisterPage() {
                 />
               </div>
 
-              <h1 className="text-3xl font-bold text-white mb-2">Create Hotspot Account</h1>
-              <p className="text-gray-300">Join our high-speed internet network</p>
+              {/* Location-specific branding */}
+              {locationDetails && (
+                <div className="mb-4">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium mb-3">
+                    <MapPin className="h-4 w-4" />
+                    {locationDetails.name}
+                  </div>
+                  <h1 className="text-3xl font-bold text-white mb-2">Create Account for {locationDetails.display_name}</h1>
+                  <p className="text-gray-300">
+                    Join our high-speed internet network
+                    {locationDetails.city && locationDetails.state && ` in ${locationDetails.city}, ${locationDetails.state}`}
+                  </p>
+                </div>
+              )}
+
+              {/* Default header when no location */}
+              {!locationDetails && (
+                <>
+                  <h1 className="text-3xl font-bold text-white mb-2">Create Hotspot Account</h1>
+                  <p className="text-gray-300">Join our high-speed internet network</p>
+                </>
+              )}
 
               {/* Progress Steps */}
               <div className="flex items-center justify-center mt-8 mb-6">
@@ -456,7 +525,7 @@ export default function HotspotRegisterPage() {
                               </div>
                               <div className="flex items-center gap-2 text-gray-300">
                                 <Clock className="h-4 w-4 text-yellow-500" />
-                                <span>Duration: {plan.timebaseexp}</span>
+                                <span>Duration: {plan.timeunitexp} {plan.timebaseexp}</span>
                               </div>
                             </div>
                             
@@ -498,8 +567,8 @@ export default function HotspotRegisterPage() {
                           <span className="text-white font-mono">{registrationData.phone}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-400">Password:</span>
-                          <span className="text-white font-mono">{registrationData.password}</span>
+                          <span className="text-gray-400">4-digit PIN:</span>
+                          <span className="text-white font-mono">{formatPasswordForDisplay(registrationData.password)}</span>
                         </div>
                       </div>
                       <p className="text-xs text-gray-500 mt-4">
@@ -577,5 +646,20 @@ export default function HotspotRegisterPage() {
         </motion.div>
       </div>
     </div>
+  );
+}
+
+export default function HotspotRegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-blue-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-400 text-lg">Loading registration form...</p>
+        </div>
+      </div>
+    }>
+      <HotspotRegisterContent />
+    </Suspense>
   );
 } 

@@ -10,7 +10,7 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-// Location-specific configuration
+// Location-specific configuration from database
 interface LocationInfo {
   name: string;
   displayName: string;
@@ -24,61 +24,19 @@ interface LocationInfo {
     email?: string;
     address?: string;
   };
+  registration_enabled?: boolean;
 }
 
-// Location configurations for different hotspot locations
-const locations: Record<string, LocationInfo> = {
-  awka: {
-    name: "Awka",
-    displayName: "PHSWEB Awka Branch",
-    welcomeMessage: "Welcome to PHSWEB Awka!",
-    description: "Connect to our high-speed internet at our Awka location.",
-    features: ["High-Speed Internet", "24/7 Support", "Secure Connection"],
-    brandColor: "from-blue-600 to-purple-600",
-    backgroundGradient: "from-blue-50 to-purple-50",
-    contactInfo: {
-      phone: "+234-XXX-XXX-XXXX",
-      email: "awka@phsweb.com",
-      address: "123 Main Street, Awka, Anambra State"
-    }
-  },
-  lagos: {
-    name: "Lagos",
-    displayName: "PHSWEB Lagos Island",
-    welcomeMessage: "Welcome to PHSWEB Lagos!",
-    description: "Experience premium internet service in the heart of Lagos.",
-    features: ["Ultra-Fast Internet", "Premium Support", "Business Grade"],
-    brandColor: "from-green-600 to-teal-600",
-    backgroundGradient: "from-green-50 to-teal-50",
-    contactInfo: {
-      phone: "+234-XXX-XXX-XXXX",
-      email: "lagos@phsweb.com",
-      address: "456 Victoria Island, Lagos State"
-    }
-  },
-  abuja: {
-    name: "Abuja",
-    displayName: "PHSWEB Abuja Central",
-    welcomeMessage: "Welcome to PHSWEB Abuja!",
-    description: "Connect to reliable internet in Nigeria's capital city.",
-    features: ["Reliable Connection", "Government Grade", "24/7 Monitoring"],
-    brandColor: "from-orange-600 to-red-600",
-    backgroundGradient: "from-orange-50 to-red-50",
-    contactInfo: {
-      phone: "+234-XXX-XXX-XXXX",
-      email: "abuja@phsweb.com",
-      address: "789 Central District, Abuja FCT"
-    }
-  },
-  default: {
-    name: "Guest",
-    displayName: "PHSWEB Guest Network",
-    welcomeMessage: "Welcome to PHSWEB!",
-    description: "Connect to our guest network for internet access.",
-    features: ["Free Internet", "Easy Access", "Secure Connection"],
-    brandColor: "from-gray-600 to-slate-600",
-    backgroundGradient: "from-gray-50 to-slate-50"
-  }
+// Default fallback configuration
+const defaultLocationInfo: LocationInfo = {
+  name: "Guest",
+  displayName: "PHSWEB Guest Network",
+  welcomeMessage: "Welcome to PHSWEB!",
+  description: "Connect to our guest network for internet access.",
+  features: ["Free Internet", "Easy Access", "Secure Connection"],
+  brandColor: "from-gray-600 to-slate-600",
+  backgroundGradient: "from-gray-50 to-slate-50",
+  registration_enabled: true
 };
 
 interface HotspotLoginPageProps {
@@ -92,6 +50,8 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [locationId, setLocationId] = useState<string>('');
+  const [locationInfo, setLocationInfo] = useState<LocationInfo>(defaultLocationInfo);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(true);
 
   // Essential MikroTik parameters
   const linkLogin = searchParams.get('link-login');
@@ -101,9 +61,6 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
   // Test mode - allows bypassing MikroTik parameter check
   const testMode = searchParams.get('test') === 'true';
 
-  // Get location info once we have the locationId
-  const locationInfo = locations[locationId.toLowerCase()] || locations.default;
-
   // Resolve params Promise and extract locationId
   useEffect(() => {
     const resolveParams = async () => {
@@ -112,6 +69,59 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
     };
     resolveParams();
   }, [params]);
+
+  // Fetch location data from database
+  useEffect(() => {
+    const fetchLocationData = async () => {
+      if (!locationId) return;
+      
+      setIsLoadingLocation(true);
+      try {
+        const response = await fetch(`/api/locations/${locationId}`);
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+          const dbLocation = data.data;
+          setLocationInfo({
+            name: dbLocation.name,
+            displayName: dbLocation.display_name,
+            welcomeMessage: dbLocation.welcome_message || `Welcome to ${dbLocation.display_name}!`,
+            description: dbLocation.description || `Connect to our high-speed internet at our ${dbLocation.name} location.`,
+            features: dbLocation.features || ["High-Speed Internet", "24/7 Support", "Secure Connection"],
+            brandColor: dbLocation.brand_color_primary || "from-blue-600 to-purple-600",
+            backgroundGradient: dbLocation.brand_color_secondary || "from-blue-50 to-purple-50",
+            contactInfo: {
+              phone: dbLocation.contact_phone,
+              email: dbLocation.contact_email,
+              address: dbLocation.address
+            },
+            registration_enabled: dbLocation.registration_enabled !== false
+          });
+        } else {
+          console.warn(`Location ${locationId} not found in database, using default config`);
+          // Update default with locationId for fallback
+          setLocationInfo({
+            ...defaultLocationInfo,
+            name: locationId.charAt(0).toUpperCase() + locationId.slice(1),
+            displayName: `PHSWEB ${locationId.charAt(0).toUpperCase() + locationId.slice(1)} Branch`,
+            welcomeMessage: `Welcome to PHSWEB ${locationId.charAt(0).toUpperCase() + locationId.slice(1)}!`
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching location data:', err);
+        setLocationInfo({
+          ...defaultLocationInfo,
+          name: locationId.charAt(0).toUpperCase() + locationId.slice(1),
+          displayName: `PHSWEB ${locationId.charAt(0).toUpperCase() + locationId.slice(1)} Branch`,
+          welcomeMessage: `Welcome to PHSWEB ${locationId.charAt(0).toUpperCase() + locationId.slice(1)}!`
+        });
+      } finally {
+        setIsLoadingLocation(false);
+      }
+    };
+
+    fetchLocationData();
+  }, [locationId]);
 
   // Set error from URL parameter
   useEffect(() => {
@@ -208,6 +218,18 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
     }
   };
 
+  // Show loading state while fetching location data
+  if (isLoadingLocation) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-300 text-lg">Loading location information...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900">
       {/* Test mode indicator */}
@@ -263,13 +285,13 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
                 {/* Login Form */}
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="username" className="text-sm font-medium text-gray-300">Username</Label>
+                    <Label htmlFor="username" className="text-sm font-medium text-gray-300">Phone Number</Label>
                     <Input
                       id="username"
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      placeholder="Enter your username"
+                      placeholder="Enter your phone number"
                       required
                       autoFocus
                       className="h-12 bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-blue-500"
@@ -333,18 +355,20 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
                   <h4 className="text-center text-gray-300 font-medium">Need an account?</h4>
                   
                   <div className="grid grid-cols-1 gap-3">
-                    {/* Create Hotspot Account Button */}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-12 bg-transparent border-2 border-purple-500/50 text-purple-300 hover:bg-purple-500/10 hover:border-purple-400 transition-all duration-200"
-                      onClick={() => window.open('/hotspot/register', '_blank')}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4" />
-                        Create Hotspot Account
-                      </div>
-                    </Button>
+                    {/* Create Hotspot Account Button - only show if registration is enabled */}
+                    {locationInfo.registration_enabled !== false && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-12 bg-transparent border-2 border-purple-500/50 text-purple-300 hover:bg-purple-500/10 hover:border-purple-400 transition-all duration-200"
+                        onClick={() => window.open(`/hotspot/register?location=${locationId}`, '_blank')}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          Create Hotspot Account
+                        </div>
+                      </Button>
+                    )}
 
                     {/* Guest Access Button */}
                     <Button
@@ -364,6 +388,21 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
                   </div>
                 </div>
               </div>
+
+              {/* Features Section */}
+              {locationInfo.features && locationInfo.features.length > 0 && (
+                <div className="pt-4 border-t border-gray-700/50">
+                  <h4 className="text-sm font-medium text-gray-300 mb-3">Features</h4>
+                  <div className="grid grid-cols-1 gap-2">
+                    {locationInfo.features.map((feature, index) => (
+                      <div key={index} className="flex items-center gap-2 text-xs text-gray-400">
+                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
+                        {feature}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Terms */}
               <div className="pt-4 border-t border-gray-700/50">

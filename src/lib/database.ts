@@ -18,6 +18,16 @@ export interface HotspotLocation {
   country?: string
   timezone?: string
   is_active: boolean
+  group_id?: number
+  default_owner_id?: string
+  registration_enabled?: boolean
+  // New customization fields for landing page
+  welcome_message?: string
+  brand_color_primary?: string
+  brand_color_secondary?: string
+  contact_phone?: string
+  contact_email?: string
+  features?: string[] // JSON array stored as JSONB in database
   created_at: string
   updated_at: string
 }
@@ -69,6 +79,10 @@ export interface Customer {
   last_service_plan_id?: number
   last_service_plan_name?: string
   last_renewal_date?: string
+  wifi_password?: string
+  registration_source?: string
+  location_id?: string
+  is_hotspot_user?: boolean
   created_at: string
   updated_at: string
 }
@@ -606,6 +620,163 @@ export async function getOwnerStats(ownerId: string, startDate?: string, endDate
       monthlyCommissions: 0,
       activeCustomers: 0
     }
+  }
+}
+
+// HOTSPOT CUSTOMER OPERATIONS
+
+export async function createHotspotCustomer(customerData: {
+  username: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  wifi_password: string;
+  location_id: string;
+  account_owner_id: string;
+  last_service_plan_id?: number;
+  last_service_plan_name?: string;
+}): Promise<Customer> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('customers')
+      .insert({
+        ...customerData,
+        registration_source: 'hotspot_registration',
+        is_hotspot_user: true,
+        last_renewal_date: new Date().toISOString()
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error creating hotspot customer:', error)
+      throw error
+    }
+
+    return data
+  } catch (error) {
+    console.error('Exception in createHotspotCustomer:', error)
+    throw error
+  }
+}
+
+export async function getHotspotCustomerCountByLocation(locationId: string): Promise<number> {
+  try {
+    const { count, error } = await supabaseAdmin
+      .from('customers')
+      .select('*', { count: 'exact', head: true })
+      .eq('location_id', locationId)
+      .eq('is_hotspot_user', true)
+
+    if (error) {
+      console.error('Error getting hotspot customer count:', error)
+      return 0
+    }
+
+    return count || 0
+  } catch (error) {
+    console.error('Exception in getHotspotCustomerCountByLocation:', error)
+    return 0
+  }
+}
+
+export async function getHotspotCustomerCounts(): Promise<Record<string, { hotspot: number }>> {
+  try {
+    // Get hotspot customer counts by location
+    const { data: hotspotData, error: hotspotError } = await supabaseAdmin
+      .from('customers')
+      .select('location_id')
+      .eq('is_hotspot_user', true)
+      .not('location_id', 'is', null)
+
+    if (hotspotError) {
+      console.error('Error getting hotspot customer counts:', hotspotError)
+      return {}
+    }
+
+    // Count by location
+    const counts: Record<string, { hotspot: number }> = {}
+
+    // Count hotspot customers
+    hotspotData?.forEach(customer => {
+      if (customer.location_id) {
+        if (!counts[customer.location_id]) {
+          counts[customer.location_id] = { hotspot: 0 }
+        }
+        counts[customer.location_id].hotspot++
+      }
+    })
+
+    return counts
+  } catch (error) {
+    console.error('Exception in getHotspotCustomerCounts:', error)
+    return {}
+  }
+}
+
+export async function getLocationWithOwner(locationId: string): Promise<(HotspotLocation & { owner?: AccountOwner }) | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('hotspot_locations')
+      .select(`
+        *,
+        account_owners!fk_hotspot_locations_default_owner_id (
+          id,
+          owner_username,
+          name,
+          first_name,
+          last_name,
+          email,
+          commission_rate,
+          is_active
+        )
+      `)
+      .eq('id', locationId)
+      .single()
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null
+      }
+      console.error('Error fetching location with owner:', error)
+      throw error
+    }
+
+    // Transform the response to match our interface
+    const location = data as HotspotLocation & { 
+      account_owners?: AccountOwner | null 
+    }
+    const result: HotspotLocation & { owner?: AccountOwner } = {
+      id: location.id,
+      name: location.name,
+      display_name: location.display_name,
+      status: location.status,
+      description: location.description,
+      address: location.address,
+      city: location.city,
+      state: location.state,
+      country: location.country,
+      timezone: location.timezone,
+      is_active: location.is_active,
+      group_id: location.group_id,
+      default_owner_id: location.default_owner_id,
+      registration_enabled: location.registration_enabled,
+      created_at: location.created_at,
+      updated_at: location.updated_at
+    }
+
+    if (location.account_owners) {
+      result.owner = location.account_owners
+    }
+
+    return result
+  } catch (error) {
+    console.error('Exception in getLocationWithOwner:', error)
+    throw error
   }
 }
 

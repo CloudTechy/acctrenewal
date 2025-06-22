@@ -24,7 +24,26 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { id, name, display_name, description, address, city, state, status = 'inactive' } = body
+    const { 
+      id, 
+      name, 
+      display_name, 
+      description, 
+      address, 
+      city, 
+      state, 
+      status = 'inactive',
+      group_id,
+      default_owner_id,
+      registration_enabled,
+      // New customization fields
+      welcome_message,
+      brand_color_primary,
+      brand_color_secondary,
+      contact_phone,
+      contact_email,
+      features
+    } = body
 
     if (!id || !name || !display_name) {
       return NextResponse.json(
@@ -42,7 +61,17 @@ export async function POST(request: Request) {
       city,
       state,
       status,
-      is_active: true
+      is_active: true,
+      group_id,
+      default_owner_id,
+      registration_enabled,
+      // New customization fields
+      welcome_message,
+      brand_color_primary,
+      brand_color_secondary,
+      contact_phone,
+      contact_email,
+      features
     }
 
     const location = await createHotspotLocation(locationData)

@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { 
   getAllHotspotLocations, 
   getRouterConfig, 
-  updateRouterConnectionStatus 
+  updateRouterConnectionStatus,
+  getHotspotCustomerCountByLocation
 } from '@/lib/database';
 
 // Helper function to get router stats using REST API
@@ -79,30 +80,42 @@ async function getRouterStats(host: string, username: string, password: string, 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const locationId = searchParams.get('location');
-
-    // Get all locations
+    const locationId = searchParams.get('locationId');
+    
     const locations = await getAllHotspotLocations();
+    
+    if (!locations || locations.length === 0) {
+      return NextResponse.json({
+        error: 'No hotspot locations found',
+        locations: {},
+        timestamp: new Date().toISOString(),
+        totalActiveUsers: 0,
+        totalLocations: 0,
+        activeLocations: 0
+      });
+    }
+
     const responseData: Record<string, any> = {};
 
-    // If specific location requested
+    // Handle single location request
     if (locationId) {
       const location = locations.find(l => l.id === locationId);
       if (!location) {
         return NextResponse.json(
-          { error: `Location not found: ${locationId}` },
+          { error: 'Location not found' },
           { status: 404 }
         );
       }
 
       const routerConfig = await getRouterConfig(locationId);
+      
       if (!routerConfig) {
         return NextResponse.json({
           locationId,
           error: 'No router configuration found',
           stats: {
             activeUsers: 0,
-            totalUsers: 0,
+            hotspotCustomers: await getHotspotCustomerCountByLocation(locationId),
             lastActivity: 'No router configured',
           },
           routerStatus: {
@@ -113,7 +126,8 @@ export async function GET(request: NextRequest) {
             freeMemory: 0,
             totalMemory: 0,
           },
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          apiType: 'No Router'
         });
       }
 
@@ -132,7 +146,7 @@ export async function GET(request: NextRequest) {
           locationId,
           stats: {
             activeUsers: stats.activeUsers,
-            totalUsers: stats.activeUsers,
+            hotspotCustomers: await getHotspotCustomerCountByLocation(locationId),
             lastActivity: new Date().toISOString(),
           },
           routerStatus: {
@@ -163,7 +177,7 @@ export async function GET(request: NextRequest) {
           details: error instanceof Error ? error.message : 'Unknown error',
           stats: {
             activeUsers: 0,
-            totalUsers: 0,
+            hotspotCustomers: await getHotspotCustomerCountByLocation(locationId),
             lastActivity: 'Connection failed',
           },
           routerStatus: {
@@ -182,17 +196,23 @@ export async function GET(request: NextRequest) {
 
     // Get stats for all locations
     let totalActiveUsers = 0;
+    let totalHotspotCustomers = 0;
     let activeLocations = 0;
 
     for (const location of locations) {
       const routerConfig = await getRouterConfig(location.id);
+      
+      // Get database counts for this location
+      const locationHotspotCustomers = await getHotspotCustomerCountByLocation(location.id);
+      
+      totalHotspotCustomers += locationHotspotCustomers;
       
       if (!routerConfig) {
         responseData[location.id] = {
           error: 'No router configuration',
           stats: {
             activeUsers: 0,
-            totalUsers: 0,
+            hotspotCustomers: locationHotspotCustomers,
             lastActivity: 'No router configured',
           },
           routerStatus: {
@@ -221,7 +241,7 @@ export async function GET(request: NextRequest) {
         responseData[location.id] = {
           stats: {
             activeUsers: stats.activeUsers,
-            totalUsers: stats.activeUsers,
+            hotspotCustomers: locationHotspotCustomers,
             lastActivity: new Date().toISOString(),
           },
           routerStatus: {
@@ -252,7 +272,7 @@ export async function GET(request: NextRequest) {
           details: error instanceof Error ? error.message : 'Unknown error',
           stats: {
             activeUsers: 0,
-            totalUsers: 0,
+            hotspotCustomers: locationHotspotCustomers,
             lastActivity: 'Connection failed',
           },
           routerStatus: {
@@ -271,6 +291,7 @@ export async function GET(request: NextRequest) {
       locations: responseData,
       timestamp: new Date().toISOString(),
       totalActiveUsers,
+      totalHotspotCustomers,
       totalLocations: locations.length,
       activeLocations,
       apiType: 'REST API'

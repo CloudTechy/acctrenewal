@@ -24,7 +24,9 @@ import {
   Save,
   X,
   Eye,
-  EyeOff
+  EyeOff,
+  Power,
+  PowerOff
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -32,6 +34,7 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { toggleHotspot, HotspotControlResponse } from '@/lib/hotspot-control';
 
 // Location management interface
 interface HotspotLocation {
@@ -43,6 +46,32 @@ interface HotspotLocation {
   address?: string;
   city?: string;
   state?: string;
+  is_active: boolean;
+  // New fields for hotspot registration
+  group_id?: number;
+  default_owner_id?: string;
+  registration_enabled?: boolean;
+  // New customization fields for landing page
+  welcome_message?: string;
+  brand_color_primary?: string;
+  brand_color_secondary?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  features?: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+// Add AccountOwner interface
+interface AccountOwner {
+  id: string;
+  owner_username: string;
+  name: string;
+  first_name?: string;
+  last_name?: string;
+  email: string;
+  phone?: string;
+  commission_rate: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -65,7 +94,7 @@ interface RouterConfig {
 
 interface LocationWithStats extends HotspotLocation {
   activeUsers: number;
-  totalUsers: number;
+  registeredCustomers: number;
   lastActivity: string;
   loginUrl: string;
   routerConfig?: RouterConfig;
@@ -80,9 +109,9 @@ interface LocationWithStats extends HotspotLocation {
 interface HotspotStatsResponse {
   locations: Record<string, {
     stats?: {
-    activeUsers: number;
-    totalUsers: number;
-    lastActivity: string;
+      activeUsers: number;
+      hotspotCustomers: number;
+      lastActivity: string;
     };
     routerStatus?: {
       isOnline: boolean;
@@ -96,13 +125,16 @@ interface HotspotStatsResponse {
   }>;
   timestamp: string;
   totalActiveUsers: number;
+  totalHotspotCustomers: number;
   totalLocations: number;
   activeLocations: number;
 }
 
 export default function HotspotManagementPage() {
   const [locations, setLocations] = useState<LocationWithStats[]>([]);
+  const [accountOwners, setAccountOwners] = useState<AccountOwner[]>([]);
   const [showAddLocation, setShowAddLocation] = useState(false);
+  const [showEditLocation, setShowEditLocation] = useState<string | null>(null);
   const [showRouterConfig, setShowRouterConfig] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -111,6 +143,10 @@ export default function HotspotManagementPage() {
   const [connectionTest, setConnectionTest] = useState<{[key: string]: 'testing' | 'success' | 'failed'}>({});
   const [showPassword, setShowPassword] = useState(false);
   
+  // New state for MikroTik hotspot control
+  const [hotspotToggling, setHotspotToggling] = useState<{[key: string]: boolean}>({});
+  const [hotspotStatus, setHotspotStatus] = useState<{[key: string]: boolean | null}>({});
+
   const [newLocation, setNewLocation] = useState({
     id: '',
     name: '',
@@ -118,7 +154,37 @@ export default function HotspotManagementPage() {
     description: '',
     address: '',
     city: '',
-    state: ''
+    state: '',
+    group_id: 1,
+    default_owner_id: '',
+    registration_enabled: true,
+    // New customization fields
+    welcome_message: '',
+    brand_color_primary: 'from-blue-600 to-purple-600',
+    brand_color_secondary: 'from-blue-50 to-purple-50',
+    contact_phone: '',
+    contact_email: '',
+    features: ['High-Speed Internet', '24/7 Support', 'Secure Connection']
+  });
+
+  const [editLocation, setEditLocation] = useState({
+    id: '',
+    name: '',
+    display_name: '',
+    description: '',
+    address: '',
+    city: '',
+    state: '',
+    group_id: 1,
+    default_owner_id: '',
+    registration_enabled: true,
+    // New customization fields
+    welcome_message: '',
+    brand_color_primary: 'from-blue-600 to-purple-600',
+    brand_color_secondary: 'from-blue-50 to-purple-50',
+    contact_phone: '',
+    contact_email: '',
+    features: ['High-Speed Internet', '24/7 Support', 'Secure Connection']
   });
   
   const [routerConfig, setRouterConfig] = useState({
@@ -130,6 +196,22 @@ export default function HotspotManagementPage() {
     connection_type: 'api' as 'api' | 'ssh' | 'winbox'
   });
 
+  // Fetch account owners from database
+  const fetchAccountOwners = async () => {
+    try {
+      const response = await fetch('/api/owners');
+      const data = await response.json();
+      
+      if (data.success) {
+        setAccountOwners(data.data);
+      } else {
+        console.error('Failed to fetch account owners:', data.error);
+      }
+    } catch (err) {
+      console.error('Error fetching account owners:', err);
+    }
+  };
+
   // Fetch locations from database
   const fetchLocations = async () => {
     try {
@@ -140,7 +222,7 @@ export default function HotspotManagementPage() {
         const locationsWithDefaults = data.data.map((location: HotspotLocation) => ({
           ...location,
           activeUsers: 0,
-          totalUsers: 0,
+          registeredCustomers: 0,
           lastActivity: 'Loading...',
           loginUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/hotspot/${location.id}`
         }));
@@ -150,6 +232,9 @@ export default function HotspotManagementPage() {
         await Promise.all(locationsWithDefaults.map((location: LocationWithStats) => 
           fetchRouterConfigForLocation(location.id)
         ));
+
+        // Fetch hotspot customer counts for each location
+        await fetchHotspotCustomerCounts();
       } else {
         throw new Error(data.error || 'Failed to fetch locations');
       }
@@ -176,6 +261,23 @@ export default function HotspotManagementPage() {
       }
     } catch (err) {
       console.error(`Error fetching router config for ${locationId}:`, err);
+    }
+  };
+
+  // Fetch hotspot customer counts from database
+  const fetchHotspotCustomerCounts = async () => {
+    try {
+      const response = await fetch('/api/hotspot/customer-counts');
+      const data = await response.json();
+      
+      if (data.success) {
+        setLocations(prev => prev.map(location => ({
+          ...location,
+          registeredCustomers: data.counts[location.id]?.hotspot || 0
+        })));
+      }
+    } catch (err) {
+      console.error('Error fetching hotspot customer counts:', err);
     }
   };
 
@@ -211,7 +313,7 @@ export default function HotspotManagementPage() {
             return {
               ...location,
               activeUsers: locationData.stats?.activeUsers || 0,
-              totalUsers: locationData.stats?.totalUsers || 0,
+              registeredCustomers: locationData.stats?.hotspotCustomers || 0,
               lastActivity: locationData.stats?.lastActivity || 'No data',
               connectionDetails: locationData.routerStatus ? {
                 uptime: locationData.routerStatus.uptime,
@@ -310,6 +412,7 @@ export default function HotspotManagementPage() {
 
   // Initial load and periodic updates
   useEffect(() => {
+    fetchAccountOwners();
     fetchLocations().then(() => {
     fetchHotspotStats();
     });
@@ -372,13 +475,98 @@ export default function HotspotManagementPage() {
 
       if (data.success) {
         await fetchLocations();
-        setNewLocation({ id: '', name: '', display_name: '', description: '', address: '', city: '', state: '' });
+        setNewLocation({ id: '', name: '', display_name: '', description: '', address: '', city: '', state: '', group_id: 1, default_owner_id: '', registration_enabled: true, welcome_message: '', brand_color_primary: 'from-blue-600 to-purple-600', brand_color_secondary: 'from-blue-50 to-purple-50', contact_phone: '', contact_email: '', features: ['High-Speed Internet', '24/7 Support', 'Secure Connection'] });
         setShowAddLocation(false);
       } else {
         setError(data.error || 'Failed to create location');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create location');
+    }
+  };
+
+  const handleEditLocation = (locationId: string) => {
+    const location = locations.find(l => l.id === locationId);
+    if (location) {
+      setEditLocation({
+        id: location.id,
+        name: location.name,
+        display_name: location.display_name,
+        description: location.description || '',
+        address: location.address || '',
+        city: location.city || '',
+        state: location.state || '',
+        group_id: location.group_id || 1,
+        default_owner_id: location.default_owner_id || '',
+        registration_enabled: location.registration_enabled ?? true,
+        welcome_message: location.welcome_message || '',
+        brand_color_primary: location.brand_color_primary || 'from-blue-600 to-purple-600',
+        brand_color_secondary: location.brand_color_secondary || 'from-blue-50 to-purple-50',
+        contact_phone: location.contact_phone || '',
+        contact_email: location.contact_email || '',
+        features: location.features || ['High-Speed Internet', '24/7 Support', 'Secure Connection']
+      });
+      setShowEditLocation(locationId);
+    }
+  };
+
+  const handleSaveEditLocation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showEditLocation) return;
+
+    try {
+      const response = await fetch(`/api/locations/${showEditLocation}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: editLocation.name,
+          display_name: editLocation.display_name,
+          description: editLocation.description,
+          address: editLocation.address,
+          city: editLocation.city,
+          state: editLocation.state,
+          group_id: editLocation.group_id,
+          default_owner_id: editLocation.default_owner_id,
+          registration_enabled: editLocation.registration_enabled,
+          welcome_message: editLocation.welcome_message,
+          brand_color_primary: editLocation.brand_color_primary,
+          brand_color_secondary: editLocation.brand_color_secondary,
+          contact_phone: editLocation.contact_phone,
+          contact_email: editLocation.contact_email,
+          features: editLocation.features
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        await fetchLocations();
+        setShowEditLocation(null);
+        setEditLocation({
+          id: '',
+          name: '',
+          display_name: '',
+          description: '',
+          address: '',
+          city: '',
+          state: '',
+          group_id: 1,
+          default_owner_id: '',
+          registration_enabled: true,
+          welcome_message: '',
+          brand_color_primary: 'from-blue-600 to-purple-600',
+          brand_color_secondary: 'from-blue-50 to-purple-50',
+          contact_phone: '',
+          contact_email: '',
+          features: ['High-Speed Internet', '24/7 Support', 'Secure Connection']
+        });
+      } else {
+        setError(data.error || 'Failed to update location');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update location');
     }
   };
 
@@ -448,8 +636,40 @@ export default function HotspotManagementPage() {
     fetchHotspotStats();
   };
 
+  // MikroTik Hotspot Control Functions
+  const handleHotspotToggle = async (locationId: string, enable: boolean) => {
+    setHotspotToggling(prev => ({ ...prev, [locationId]: true }));
+    
+    try {
+      const result: HotspotControlResponse = await toggleHotspot(locationId, enable);
+      
+      if (result.success) {
+        setHotspotStatus(prev => ({ ...prev, [locationId]: enable }));
+        setError(null);
+        
+        // Show success message
+        console.log(`✅ ${result.message}`);
+        
+        // Refresh stats to see updated router status
+        fetchHotspotStats();
+      } else {
+        setError(result.error || `Failed to ${enable ? 'enable' : 'disable'} hotspot`);
+        console.error(`❌ Hotspot control failed:`, result.error);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      setError(`Failed to control hotspot: ${errorMessage}`);
+      console.error('❌ Hotspot control error:', err);
+    } finally {
+      setHotspotToggling(prev => ({ ...prev, [locationId]: false }));
+    }
+  };
+
+  const enableHotspot = (locationId: string) => handleHotspotToggle(locationId, true);
+  const disableHotspot = (locationId: string) => handleHotspotToggle(locationId, false);
+
   const totalActiveUsers = locations.reduce((sum, loc) => sum + loc.activeUsers, 0);
-  const totalUsers = locations.reduce((sum, loc) => sum + loc.totalUsers, 0);
+  const totalRegisteredCustomers = locations.reduce((sum, loc) => sum + loc.registeredCustomers, 0);
   const activeLocations = locations.filter(loc => loc.routerConfig?.connection_status === 'connected').length;
 
   if (isLoading) {
@@ -575,28 +795,10 @@ export default function HotspotManagementPage() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-400 text-sm">Total Users</p>
-                    <p className="text-3xl font-bold text-white">{totalUsers}</p>
+                    <p className="text-gray-400 text-sm">Total Registered Customers</p>
+                    <p className="text-3xl font-bold text-white">{totalRegisteredCustomers}</p>
                   </div>
-                  <Activity className="h-8 w-8 text-green-400" />
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <Card className="bg-gray-900/80 border-gray-700">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-400 text-sm">Connected Locations</p>
-                    <p className="text-3xl font-bold text-white">{activeLocations}</p>
-                  </div>
-                  <MapPin className="h-8 w-8 text-purple-400" />
+                  <Wifi className="h-8 w-8 text-purple-400" />
                 </div>
               </CardContent>
             </Card>
@@ -611,10 +813,28 @@ export default function HotspotManagementPage() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
+                    <p className="text-gray-400 text-sm">Connected Locations</p>
+                    <p className="text-3xl font-bold text-white">{activeLocations}</p>
+                  </div>
+                  <MapPin className="h-8 w-8 text-orange-400" />
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            <Card className="bg-gray-900/80 border-gray-700">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
                     <p className="text-gray-400 text-sm">Total Locations</p>
                     <p className="text-3xl font-bold text-white">{locations.length}</p>
                   </div>
-                  <Settings className="h-8 w-8 text-orange-400" />
+                  <Settings className="h-8 w-8 text-gray-400" />
                 </div>
               </CardContent>
             </Card>
@@ -647,6 +867,27 @@ export default function HotspotManagementPage() {
                             {location.city && location.state && (
                               <p className="text-sm text-gray-500">{location.city}, {location.state}</p>
                             )}
+                            {/* New fields display */}
+                            <div className="flex items-center gap-4 mt-1">
+                              {location.group_id && (
+                                <p className="text-xs text-gray-500">
+                                  <span className="text-gray-400">Group:</span> {location.group_id}
+                                </p>
+                              )}
+                              {location.registration_enabled !== undefined && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs text-gray-400">Hotspot:</span>
+                                  <Badge 
+                                    variant={location.registration_enabled ? "default" : "secondary"}
+                                    className={`text-xs ${location.registration_enabled 
+                                      ? 'bg-green-900/50 text-green-400 border-green-700' 
+                                      : 'bg-gray-600 text-gray-300'}`}
+                                  >
+                                    {location.registration_enabled ? 'Enabled' : 'Disabled'}
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
                           </div>
                           <div className="flex items-center gap-2">
                             {getConnectionIcon(location.routerConfig)}
@@ -732,20 +973,55 @@ export default function HotspotManagementPage() {
                           </div>
                         )}
 
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div>
                             <p className="text-sm text-gray-400">Active Users</p>
                             <p className="text-xl font-semibold text-blue-400">{location.activeUsers}</p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-400">Total Users</p>
-                            <p className="text-xl font-semibold text-green-400">{location.totalUsers}</p>
+                            <p className="text-sm text-gray-400">Registered Customers</p>
+                            <p className="text-xl font-semibold text-purple-400">{location.registeredCustomers}</p>
                           </div>
                           <div>
                             <p className="text-sm text-gray-400">Last Activity</p>
                             <p className="text-sm text-gray-300">{location.lastActivity}</p>
                           </div>
                         </div>
+
+                        {/* Owner Information */}
+                        {location.default_owner_id && (
+                          <div className="bg-gray-800/50 rounded-lg p-3 mb-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Users className="h-4 w-4 text-purple-400" />
+                              <h4 className="text-sm font-medium text-white">Account Owner</h4>
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              {(() => {
+                                const owner = accountOwners.find(o => o.id === location.default_owner_id);
+                                return owner ? (
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <span>Name: </span>
+                                      <span className="text-gray-300">{owner.name}</span>
+                                    </div>
+                                    <div>
+                                      <span>Commission: </span>
+                                      <span className="text-purple-400">{owner.commission_rate}%</span>
+                                    </div>
+                                    {owner.email && (
+                                      <div className="col-span-2">
+                                        <span>Email: </span>
+                                        <span className="text-gray-300">{owner.email}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-red-400">Owner not found</span>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        )}
 
                         <div className="bg-gray-800/50 rounded-lg p-3">
                           <p className="text-xs text-gray-400 mb-1">Hotspot Login URL:</p>
@@ -771,6 +1047,42 @@ export default function HotspotManagementPage() {
                       </div>
 
                       <div className="flex flex-col gap-2 ml-4">
+                        {/* MikroTik Hotspot Control Buttons */}
+                        {location.routerConfig && location.routerConfig.connection_status === 'connected' && (
+                          <div className="flex flex-col gap-1 mb-2">
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className={`bg-gray-800 border-gray-600 text-white hover:bg-green-700 ${
+                                hotspotStatus[location.id] === true ? 'border-green-500 bg-green-900/50' : ''
+                              }`}
+                              onClick={() => enableHotspot(location.id)}
+                              disabled={hotspotToggling[location.id]}
+                            >
+                              {hotspotToggling[location.id] ? (
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />
+                              ) : (
+                                <Power className="h-3 w-3" />
+                              )}
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className={`bg-gray-800 border-gray-600 text-white hover:bg-red-700 ${
+                                hotspotStatus[location.id] === false ? 'border-red-500 bg-red-900/50' : ''
+                              }`}
+                              onClick={() => disableHotspot(location.id)}
+                              disabled={hotspotToggling[location.id]}
+                            >
+                              {hotspotToggling[location.id] ? (
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />
+                              ) : (
+                                <PowerOff className="h-3 w-3" />
+                              )}
+                            </Button>
+                          </div>
+                        )}
+                        
                         <Button 
                           size="sm" 
                           variant="outline" 
@@ -783,6 +1095,7 @@ export default function HotspotManagementPage() {
                           size="sm" 
                           variant="outline" 
                           className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
+                          onClick={() => handleEditLocation(location.id)}
                         >
                           <Edit3 className="h-4 w-4" />
                         </Button>
@@ -869,6 +1182,147 @@ export default function HotspotManagementPage() {
                         className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
                     />
                   </div>
+                  
+                  {/* New fields for hotspot registration */}
+                  <div>
+                    <Label htmlFor="groupId" className="text-gray-300">Group ID</Label>
+                    <Input
+                      id="groupId"
+                      type="number"
+                      value={newLocation.group_id}
+                      onChange={(e) => setNewLocation({...newLocation, group_id: parseInt(e.target.value) || 1})}
+                      placeholder="1"
+                      min="1"
+                      required
+                      className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Radius Manager group ID for users registered at this location</p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="defaultOwner" className="text-gray-300">Default Owner</Label>
+                    <select
+                      id="defaultOwner"
+                      value={newLocation.default_owner_id}
+                      onChange={(e) => setNewLocation({...newLocation, default_owner_id: e.target.value})}
+                      className="flex h-10 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    >
+                      <option value="">Select an owner...</option>
+                      {accountOwners.map(owner => (
+                        <option key={owner.id} value={owner.id}>
+                          {owner.name} ({owner.commission_rate}%)
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">Account owner for commission tracking</p>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="hotspotEnabled" className="text-gray-300">Hotspot Server Enabled</Label>
+                      <p className="text-xs text-gray-500 mt-1">Enable/disable hotspot system on MikroTik router</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        id="hotspotEnabled"
+                        type="checkbox"
+                        checked={newLocation.registration_enabled}
+                        onChange={(e) => setNewLocation({...newLocation, registration_enabled: e.target.checked})}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+
+                  {/* Landing Page Customization Section */}
+                  <div className="border-t border-gray-700 pt-4">
+                    <h4 className="text-md font-medium text-white mb-3">Landing Page Customization</h4>
+                    
+                    <div>
+                      <Label htmlFor="welcomeMessage" className="text-gray-300">Welcome Message</Label>
+                      <Input
+                        id="welcomeMessage"
+                        value={newLocation.welcome_message}
+                        onChange={(e) => setNewLocation({...newLocation, welcome_message: e.target.value})}
+                        placeholder="e.g., Welcome to PHSWEB Awka!"
+                        className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Custom welcome message shown on hotspot login page</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label htmlFor="brandColorPrimary" className="text-gray-300">Primary Color</Label>
+                        <select
+                          id="brandColorPrimary"
+                          value={newLocation.brand_color_primary}
+                          onChange={(e) => setNewLocation({...newLocation, brand_color_primary: e.target.value})}
+                          className="flex h-10 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="from-blue-600 to-purple-600">Blue to Purple</option>
+                          <option value="from-green-600 to-teal-600">Green to Teal</option>
+                          <option value="from-orange-600 to-red-600">Orange to Red</option>
+                          <option value="from-purple-600 to-pink-600">Purple to Pink</option>
+                          <option value="from-indigo-600 to-blue-600">Indigo to Blue</option>
+                          <option value="from-gray-600 to-slate-600">Gray to Slate</option>
+                        </select>
+                      </div>
+                      <div>
+                        <Label htmlFor="brandColorSecondary" className="text-gray-300">Background Color</Label>
+                        <select
+                          id="brandColorSecondary"
+                          value={newLocation.brand_color_secondary}
+                          onChange={(e) => setNewLocation({...newLocation, brand_color_secondary: e.target.value})}
+                          className="flex h-10 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="from-blue-50 to-purple-50">Light Blue to Purple</option>
+                          <option value="from-green-50 to-teal-50">Light Green to Teal</option>
+                          <option value="from-orange-50 to-red-50">Light Orange to Red</option>
+                          <option value="from-purple-50 to-pink-50">Light Purple to Pink</option>
+                          <option value="from-indigo-50 to-blue-50">Light Indigo to Blue</option>
+                          <option value="from-gray-50 to-slate-50">Light Gray to Slate</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label htmlFor="contactPhone" className="text-gray-300">Contact Phone</Label>
+                        <Input
+                          id="contactPhone"
+                          value={newLocation.contact_phone}
+                          onChange={(e) => setNewLocation({...newLocation, contact_phone: e.target.value})}
+                          placeholder="e.g., +234-XXX-XXX-XXXX"
+                          className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="contactEmail" className="text-gray-300">Contact Email</Label>
+                        <Input
+                          id="contactEmail"
+                          type="email"
+                          value={newLocation.contact_email}
+                          onChange={(e) => setNewLocation({...newLocation, contact_email: e.target.value})}
+                          placeholder="e.g., awka@phsweb.com"
+                          className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="features" className="text-gray-300">Features</Label>
+                      <Input
+                        id="features"
+                        value={newLocation.features.join(', ')}
+                        onChange={(e) => setNewLocation({...newLocation, features: e.target.value.split(', ').filter(f => f.trim())})}
+                        placeholder="e.g., High-Speed Internet, 24/7 Support, Secure Connection"
+                        className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Comma-separated list of features to display</p>
+                    </div>
+                  </div>
+                  
                   <div className="flex gap-3 pt-4">
                       <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700">Add Location</Button>
                     <Button 
@@ -876,6 +1330,233 @@ export default function HotspotManagementPage() {
                       variant="outline" 
                       onClick={() => setShowAddLocation(false)}
                         className="flex-1 bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </div>
+        )}
+        </AnimatePresence>
+
+        {/* Edit Location Modal */}
+        <AnimatePresence>
+        {showEditLocation && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-gray-900 rounded-lg w-full max-w-md border border-gray-700"
+            >
+              <div className="p-6">
+                <h3 className="text-lg font-semibold mb-4 text-white">Edit Hotspot Location</h3>
+                <form onSubmit={handleSaveEditLocation} className="space-y-4">
+                  <div>
+                    <Label htmlFor="editLocationName" className="text-gray-300">Location Name</Label>
+                    <Input
+                      id="editLocationName"
+                      value={editLocation.name}
+                      onChange={(e) => setEditLocation({...editLocation, name: e.target.value})}
+                      placeholder="e.g., Kano"
+                      required
+                      className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="editDisplayName" className="text-gray-300">Display Name</Label>
+                    <Input
+                      id="editDisplayName"
+                      value={editLocation.display_name}
+                      onChange={(e) => setEditLocation({...editLocation, display_name: e.target.value})}
+                      placeholder="e.g., PHSWEB Kano Branch"
+                      required
+                      className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="editDescription" className="text-gray-300">Description</Label>
+                    <Input
+                      id="editDescription"
+                      value={editLocation.description}
+                      onChange={(e) => setEditLocation({...editLocation, description: e.target.value})}
+                      placeholder="Optional description"
+                      className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="editCity" className="text-gray-300">City</Label>
+                    <Input
+                      id="editCity"
+                      value={editLocation.city}
+                      onChange={(e) => setEditLocation({...editLocation, city: e.target.value})}
+                      placeholder="e.g., Kano"
+                      className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="editState" className="text-gray-300">State</Label>
+                    <Input
+                      id="editState"
+                      value={editLocation.state}
+                      onChange={(e) => setEditLocation({...editLocation, state: e.target.value})}
+                      placeholder="e.g., Kano"
+                      className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                    />
+                  </div>
+                  
+                  {/* Hotspot-specific fields */}
+                  <div>
+                    <Label htmlFor="editGroupId" className="text-gray-300">Group ID</Label>
+                    <Input
+                      id="editGroupId"
+                      type="number"
+                      value={editLocation.group_id}
+                      onChange={(e) => setEditLocation({...editLocation, group_id: parseInt(e.target.value) || 1})}
+                      placeholder="1"
+                      min="1"
+                      required
+                      className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Radius Manager group ID for users registered at this location</p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="editDefaultOwner" className="text-gray-300">Default Owner</Label>
+                    <select
+                      id="editDefaultOwner"
+                      value={editLocation.default_owner_id}
+                      onChange={(e) => setEditLocation({...editLocation, default_owner_id: e.target.value})}
+                      className="flex h-10 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    >
+                      <option value="">Select an owner...</option>
+                      {accountOwners.map(owner => (
+                        <option key={owner.id} value={owner.id}>
+                          {owner.name} ({owner.commission_rate}%)
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">Account owner for commission tracking</p>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="editHotspotEnabled" className="text-gray-300">Hotspot Server Enabled</Label>
+                      <p className="text-xs text-gray-500 mt-1">Enable/disable hotspot system on MikroTik router</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        id="editHotspotEnabled"
+                        type="checkbox"
+                        checked={editLocation.registration_enabled}
+                        onChange={(e) => setEditLocation({...editLocation, registration_enabled: e.target.checked})}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+
+                  {/* Landing Page Customization Section */}
+                  <div className="border-t border-gray-700 pt-4">
+                    <h4 className="text-md font-medium text-white mb-3">Landing Page Customization</h4>
+                    
+                    <div>
+                      <Label htmlFor="editWelcomeMessage" className="text-gray-300">Welcome Message</Label>
+                      <Input
+                        id="editWelcomeMessage"
+                        value={editLocation.welcome_message}
+                        onChange={(e) => setEditLocation({...editLocation, welcome_message: e.target.value})}
+                        placeholder="e.g., Welcome to PHSWEB Awka!"
+                        className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Custom welcome message shown on hotspot login page</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label htmlFor="editBrandColorPrimary" className="text-gray-300">Primary Color</Label>
+                        <select
+                          id="editBrandColorPrimary"
+                          value={editLocation.brand_color_primary}
+                          onChange={(e) => setEditLocation({...editLocation, brand_color_primary: e.target.value})}
+                          className="flex h-10 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="from-blue-600 to-purple-600">Blue to Purple</option>
+                          <option value="from-green-600 to-teal-600">Green to Teal</option>
+                          <option value="from-orange-600 to-red-600">Orange to Red</option>
+                          <option value="from-purple-600 to-pink-600">Purple to Pink</option>
+                          <option value="from-indigo-600 to-blue-600">Indigo to Blue</option>
+                          <option value="from-gray-600 to-slate-600">Gray to Slate</option>
+                        </select>
+                      </div>
+                      <div>
+                        <Label htmlFor="editBrandColorSecondary" className="text-gray-300">Background Color</Label>
+                        <select
+                          id="editBrandColorSecondary"
+                          value={editLocation.brand_color_secondary}
+                          onChange={(e) => setEditLocation({...editLocation, brand_color_secondary: e.target.value})}
+                          className="flex h-10 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="from-blue-50 to-purple-50">Light Blue to Purple</option>
+                          <option value="from-green-50 to-teal-50">Light Green to Teal</option>
+                          <option value="from-orange-50 to-red-50">Light Orange to Red</option>
+                          <option value="from-purple-50 to-pink-50">Light Purple to Pink</option>
+                          <option value="from-indigo-50 to-blue-50">Light Indigo to Blue</option>
+                          <option value="from-gray-50 to-slate-50">Light Gray to Slate</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label htmlFor="editContactPhone" className="text-gray-300">Contact Phone</Label>
+                        <Input
+                          id="editContactPhone"
+                          value={editLocation.contact_phone}
+                          onChange={(e) => setEditLocation({...editLocation, contact_phone: e.target.value})}
+                          placeholder="e.g., +234-XXX-XXX-XXXX"
+                          className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="editContactEmail" className="text-gray-300">Contact Email</Label>
+                        <Input
+                          id="editContactEmail"
+                          type="email"
+                          value={editLocation.contact_email}
+                          onChange={(e) => setEditLocation({...editLocation, contact_email: e.target.value})}
+                          placeholder="e.g., awka@phsweb.com"
+                          className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="editFeatures" className="text-gray-300">Features</Label>
+                      <Input
+                        id="editFeatures"
+                        value={editLocation.features.join(', ')}
+                        onChange={(e) => setEditLocation({...editLocation, features: e.target.value.split(', ').filter(f => f.trim())})}
+                        placeholder="e.g., High-Speed Internet, 24/7 Support, Secure Connection"
+                        className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Comma-separated list of features to display</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-3 pt-4">
+                    <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700">
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Changes
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => setShowEditLocation(null)}
+                      className="flex-1 bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
                     >
                       Cancel
                     </Button>
