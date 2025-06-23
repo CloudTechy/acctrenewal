@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Wifi, MapPin, AlertCircle, Users } from 'lucide-react';
+import { Wifi, MapPin, AlertCircle, Users, RefreshCw, KeyRound } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
@@ -383,6 +383,35 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
                       <div className="flex items-center gap-2">
                         <Wifi className="h-4 w-4" />
                         Use Guest Access
+                      </div>
+                    </Button>
+
+                    {/* Subscription Renewal Button */}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-12 bg-transparent border-2 border-green-500/50 text-green-300 hover:bg-green-500/10 hover:border-green-400 transition-all duration-200"
+                      onClick={() => window.open('/', '_blank')}
+                    >
+                      <div className="flex items-center gap-2">
+                        <RefreshCw className="h-4 w-4" />
+                        Renew Subscription
+                      </div>
+                    </Button>
+
+                    {/* Password Reset Button */}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-12 bg-transparent border-2 border-orange-500/50 text-orange-300 hover:bg-orange-500/10 hover:border-orange-400 transition-all duration-200"
+                      onClick={() => {
+                        // TODO: Implement password reset functionality
+                        alert('Password reset functionality will be implemented soon. Please contact support for assistance.');
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <KeyRound className="h-4 w-4" />
+                        Reset Password
                       </div>
                     </Button>
                   </div>
