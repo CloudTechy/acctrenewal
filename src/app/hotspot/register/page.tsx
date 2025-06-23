@@ -15,7 +15,8 @@ import {
   Clock,
   Download,
   Upload,
-  MapPin
+  MapPin,
+  MessageCircle
 } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,8 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { generateHotspotPassword, formatPasswordForDisplay } from '@/lib/password-utils';
+import { generateHotspotPassword } from '@/lib/password-utils';
+import { generateWelcomeSMS, sendWelcomeSMS } from '@/lib/sms-utils';
 
 interface ServicePlan {
   srvid: string;
@@ -208,6 +210,27 @@ function HotspotRegisterContent() {
       const data = await response.json();
       
       if (data.success) {
+        // Send welcome SMS after successful registration
+        try {
+          const welcomeMessage = generateWelcomeSMS({
+            firstName: registrationData.firstName,
+            phone: registrationData.phone,
+            password: registrationData.password,
+            locationName: locationDetails?.display_name
+          });
+          
+          const smsResponse = await sendWelcomeSMS(registrationData.phone, welcomeMessage);
+          const smsData = await smsResponse.json();
+          
+          if (!smsData.success) {
+            console.error('SMS sending failed:', smsData.error);
+            setError('Account created successfully, but SMS notification failed. Please save your credentials.');
+          }
+        } catch (smsError) {
+          console.error('SMS error:', smsError);
+          setError('Account created successfully, but SMS notification failed. Please save your credentials.');
+        }
+        
         setCurrentStep(4);
       } else {
         setError(data.error || 'Registration failed');
@@ -560,29 +583,35 @@ function HotspotRegisterContent() {
                     </div>
 
                     <div className="bg-gray-700/50 rounded-lg p-6 space-y-4">
-                      <h3 className="text-lg font-semibold text-white">Your Login Credentials</h3>
-                      <div className="space-y-2 text-left">
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Username:</span>
-                          <span className="text-white font-mono">{registrationData.phone}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">4-digit PIN:</span>
-                          <span className="text-white font-mono">{formatPasswordForDisplay(registrationData.password)}</span>
-                        </div>
+                      <div className="flex items-center justify-center gap-2 text-green-400 mb-3">
+                        <MessageCircle className="h-5 w-5" />
+                        <span className="font-medium">Welcome SMS Sent!</span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-4">
-                        Please save these credentials. You&apos;ll need them to connect to our hotspot network.
+                      <p className="text-gray-300 text-sm">
+                        We&apos;ve sent your WiFi login credentials to <strong>{registrationData.phone}</strong> via SMS.
                       </p>
+                      <p className="text-gray-400 text-xs">
+                        The message includes your username, PIN, and a link to add credit to your account.
+                      </p>
+                    </div>
+
+                    <div className="bg-blue-900/30 rounded-lg p-4">
+                      <h3 className="text-lg font-semibold text-white mb-2">Next Steps:</h3>
+                      <ul className="text-sm text-gray-300 space-y-2 text-left">
+                        <li>• Check your SMS for login credentials</li>
+                        <li>• Connect to the WiFi network</li>
+                        <li>• Visit <strong>https://phsweb.app</strong> to add credit</li>
+                        <li>• Start browsing the internet!</li>
+                      </ul>
                     </div>
 
                     <div className="flex gap-4">
                       <Button
-                        onClick={() => router.back()}
+                        onClick={() => window.open('http://hotspot1.phsweb.net', '_blank')}
                         className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 transition-all duration-200"
                       >
                         <Wifi className="h-5 w-5 mr-2" />
-                        Connect Now
+                        Go to Hotspot Portal
                       </Button>
                     </div>
                   </motion.div>

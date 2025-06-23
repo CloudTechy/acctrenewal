@@ -395,7 +395,7 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
                     >
                       <div className="flex items-center gap-2">
                         <RefreshCw className="h-4 w-4" />
-                        Renew Subscription
+                        Buy Credit & Renew Subscription
                       </div>
                     </Button>
 
