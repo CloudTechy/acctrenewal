@@ -361,7 +361,7 @@ function HotspotRegisterContent() {
                   >
                     <div className="text-center">
                       <h2 className="text-xl font-semibold text-white mb-2">Enter Your Phone Number</h2>
-                      <p className="text-gray-400">This will be your username for login</p>
+                      <p className="text-gray-400">This will be your username for login and your 4-digit PIN would be sent to this number</p>
                     </div>
 
                     <div className="space-y-4">
@@ -403,7 +403,7 @@ function HotspotRegisterContent() {
                           id="firstName"
                           value={registrationData.firstName}
                           onChange={(e) => setRegistrationData(prev => ({ ...prev, firstName: e.target.value }))}
-                          placeholder="John"
+                          placeholder="Ije"
                           className="h-12 bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-blue-500"
                         />
                       </div>
@@ -413,7 +413,7 @@ function HotspotRegisterContent() {
                           id="lastName"
                           value={registrationData.lastName}
                           onChange={(e) => setRegistrationData(prev => ({ ...prev, lastName: e.target.value }))}
-                          placeholder="Doe"
+                          placeholder="Amaka"
                           className="h-12 bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-blue-500"
                         />
                       </div>
@@ -426,7 +426,7 @@ function HotspotRegisterContent() {
                         type="email"
                         value={registrationData.email}
                         onChange={(e) => setRegistrationData(prev => ({ ...prev, email: e.target.value }))}
-                        placeholder="john@example.com"
+                        placeholder="ije.amaka@example.com"
                         className="h-12 bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-blue-500"
                       />
                     </div>
@@ -437,7 +437,7 @@ function HotspotRegisterContent() {
                         id="address"
                         value={registrationData.address}
                         onChange={(e) => setRegistrationData(prev => ({ ...prev, address: e.target.value }))}
-                        placeholder="123 Main Street"
+                        placeholder="123 Zik Avenue"
                         className="h-12 bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-blue-500"
                       />
                     </div>
