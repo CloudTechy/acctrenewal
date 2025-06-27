@@ -12,9 +12,6 @@ import {
   AlertCircle,
   Loader2,
   Wifi,
-  Clock,
-  Download,
-  Upload,
   MapPin,
   MessageCircle
 } from 'lucide-react';
@@ -151,6 +148,14 @@ function HotspotRegisterContent() {
         // Filter out disabled services (enableservice = "0")
         const enabledPlans = data.plans.filter((plan: ServicePlan) => plan.enableservice === "1");
         setServicePlans(enabledPlans);
+        
+        // Auto-select "SOLUDO SOLUTION FREE WIFI" if it exists
+        const solutionPlan = enabledPlans.find((plan: ServicePlan) => 
+          plan.srvname === "SOLUDO SOLUTION FREE WIFI"
+        );
+        if (solutionPlan) {
+          setRegistrationData(prev => ({ ...prev, serviceId: solutionPlan.srvid }));
+        }
       } else {
         setError('Failed to load service plans');
       }
@@ -279,16 +284,6 @@ function HotspotRegisterContent() {
   const formatCurrency = (amount: string) => {
     const num = parseFloat(amount);
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(num);
-  };
-
-  const formatSpeed = (speed: string) => {
-    const speedNum = parseInt(speed);
-    if (speedNum >= 1000000) {
-      return `${(speedNum / 1000000).toFixed(1)}M`;
-    } else if (speedNum >= 1000) {
-      return `${(speedNum / 1000).toFixed(1)}K`;
-    }
-    return `${speedNum}`;
   };
 
   return (
@@ -539,21 +534,6 @@ function HotspotRegisterContent() {
                             </div>
                             
                             <p className="text-gray-400 text-sm mb-3">{plan.descr}</p>
-                            
-                            <div className="space-y-2 text-sm">
-                              <div className="flex items-center gap-2 text-gray-300">
-                                <Download className="h-4 w-4 text-green-500" />
-                                <span>Download: {formatSpeed(plan.downrate)}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-gray-300">
-                                <Upload className="h-4 w-4 text-blue-500" />
-                                <span>Upload: {formatSpeed(plan.uprate)}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-gray-300">
-                                <Clock className="h-4 w-4 text-yellow-500" />
-                                <span>Duration: {plan.timeunitexp} {plan.timebaseexp}</span>
-                              </div>
-                            </div>
                             
                             <div className="mt-3 pt-3 border-t border-gray-600">
                               <div className="text-lg font-bold text-white">
