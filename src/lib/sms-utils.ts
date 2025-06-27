@@ -13,7 +13,7 @@ export function generateWelcomeSMS(data: WelcomeSMSData): string {
   const message = `Welcome ${firstName}! Your WiFi account${location} is ready. 
 Login: ${phone}
 PIN: ${password}
-connect to hotspot: http://hotspot.phsweb.net
+connect to hotspot: http://hotspot.phsweb.net/login
 Add credit: https://phsweb.app
 
 Enjoy fast internet!`;

@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { generateHotspotPassword } from '@/lib/password-utils';
 import { generateWelcomeSMS, sendWelcomeSMS } from '@/lib/sms-utils';
 
@@ -75,7 +75,6 @@ const steps = [
 ];
 
 function HotspotRegisterContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -590,7 +589,7 @@ function HotspotRegisterContent() {
 
                     <div className="flex gap-4">
                       <Button
-                        onClick={() => window.open('http://hotspot1.phsweb.net', '_blank')}
+                        onClick={() => window.open('http://hotspot.phsweb.net/login', '_blank')}
                         className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 transition-all duration-200"
                       >
                         <Wifi className="h-5 w-5 mr-2" />
@@ -647,8 +646,8 @@ function HotspotRegisterContent() {
               <div className="text-center pt-4 border-t border-gray-700/50">
                 <Button
                   variant="ghost"
-                  onClick={() => router.back()}
-                  className="text-gray-400 hover:text-white"
+                  onClick={() => window.open('http://hotspot.phsweb.net/login', '_blank')}
+                  className="text-gray-400 hover:text-blue-400 hover:bg-gray-700/50"
                 >
                   Already have an account? Go back to login
                 </Button>
