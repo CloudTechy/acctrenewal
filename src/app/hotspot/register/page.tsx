@@ -426,7 +426,7 @@ function HotspotRegisterContent() {
                           id="firstName"
                           value={registrationData.firstName}
                           onChange={(e) => setRegistrationData(prev => ({ ...prev, firstName: e.target.value }))}
-                          placeholder="Ije"
+                          placeholder="Enter First Name"
                           className="h-12 bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-blue-500"
                         />
                       </div>
@@ -436,7 +436,7 @@ function HotspotRegisterContent() {
                           id="lastName"
                           value={registrationData.lastName}
                           onChange={(e) => setRegistrationData(prev => ({ ...prev, lastName: e.target.value }))}
-                          placeholder="Amaka"
+                          placeholder="Enter Last Name"
                           className="h-12 bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-blue-500"
                         />
                       </div>
@@ -449,7 +449,7 @@ function HotspotRegisterContent() {
                         type="email"
                         value={registrationData.email}
                         onChange={(e) => setRegistrationData(prev => ({ ...prev, email: e.target.value }))}
-                        placeholder="ije.amaka@example.com"
+                        placeholder="Enter Email Address"
                         className="h-12 bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-blue-500"
                       />
                     </div>
@@ -460,7 +460,7 @@ function HotspotRegisterContent() {
                         id="address"
                         value={registrationData.address}
                         onChange={(e) => setRegistrationData(prev => ({ ...prev, address: e.target.value }))}
-                        placeholder="123 Zik Avenue"
+                        placeholder="Enter Address"
                         className="h-12 bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-blue-500"
                       />
                     </div>
@@ -472,7 +472,7 @@ function HotspotRegisterContent() {
                           id="city"
                           value={registrationData.city}
                           onChange={(e) => setRegistrationData(prev => ({ ...prev, city: e.target.value }))}
-                          placeholder="Awka"
+                          placeholder="Enter City"
                           className="h-12 bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-blue-500"
                         />
                       </div>
@@ -482,7 +482,7 @@ function HotspotRegisterContent() {
                           id="state"
                           value={registrationData.state}
                           onChange={(e) => setRegistrationData(prev => ({ ...prev, state: e.target.value }))}
-                          placeholder="Anambra"
+                          placeholder="Enter State"
                           className="h-12 bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-blue-500"
                         />
                       </div>

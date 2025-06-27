@@ -382,7 +382,7 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
                     >
                       <div className="flex items-center gap-2">
                         <Wifi className="h-4 w-4" />
-                        Use Guest Access
+                        Use Guest Access (30mins)
                       </div>
                     </Button>
 
