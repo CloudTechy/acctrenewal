@@ -41,9 +41,12 @@ export async function GET() {
       // Success - data[1] contains the service plans array
       const plans = Array.isArray(data[1]) ? data[1] : [];
       
+      // Filter out disabled services (enableservice = "0")
+      const enabledPlans = plans.filter(plan => plan.enableservice === "1");
+      
       return NextResponse.json({
         success: true,
-        plans: plans
+        plans: enabledPlans
       });
     } else {
       // Error from Radius Manager

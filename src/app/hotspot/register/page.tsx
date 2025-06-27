@@ -38,6 +38,7 @@ interface ServicePlan {
   unitprice: string;
   timebaseexp: string;
   timeunitexp: string;
+  enableservice: string;
 }
 
 interface LocationDetails {
@@ -147,7 +148,9 @@ function HotspotRegisterContent() {
       const data = await response.json();
       
       if (data.success) {
-        setServicePlans(data.plans);
+        // Filter out disabled services (enableservice = "0")
+        const enabledPlans = data.plans.filter((plan: ServicePlan) => plan.enableservice === "1");
+        setServicePlans(enabledPlans);
       } else {
         setError('Failed to load service plans');
       }
