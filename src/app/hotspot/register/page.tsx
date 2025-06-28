@@ -13,7 +13,9 @@ import {
   Loader2,
   Wifi,
   MapPin,
-  MessageCircle
+  MessageCircle,
+  Copy,
+  CheckCircle
 } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
@@ -81,6 +83,7 @@ function HotspotRegisterContent() {
   const [error, setError] = useState<string | null>(null);
   const [servicePlans, setServicePlans] = useState<ServicePlan[]>([]);
   const [locationDetails, setLocationDetails] = useState<LocationDetails | null>(null);
+  const [copied, setCopied] = useState(false);
   const [registrationData, setRegistrationData] = useState<RegistrationData>({
     phone: '',
     firstName: '',
@@ -283,6 +286,31 @@ function HotspotRegisterContent() {
   const formatCurrency = (amount: string) => {
     const num = parseFloat(amount);
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(num);
+  };
+
+  // Copy PIN to clipboard function
+  const copyPinToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(registrationData.password);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
+    } catch (err) {
+      console.error('Failed to copy PIN:', err);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = registrationData.password;
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (fallbackErr) {
+        console.error('Fallback copy failed:', fallbackErr);
+      }
+      document.body.removeChild(textArea);
+    }
   };
 
   return (
@@ -564,13 +592,60 @@ function HotspotRegisterContent() {
                       <p className="text-gray-400 mb-6">Your hotspot account has been created and is ready to use.</p>
                     </div>
 
+                    {/* PIN Display Section */}
+                    <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 rounded-lg p-6 border border-blue-500/30">
+                      <h3 className="text-lg font-semibold text-white mb-3">Your Login Details</h3>
+                      
+                      <div className="space-y-4">
+                        {/* Phone Number */}
+                        <div className="text-left">
+                          <label className="text-sm text-gray-300">Phone Number (Username):</label>
+                          <div className="text-xl font-bold text-white">{registrationData.phone}</div>
+                        </div>
+                        
+                        {/* PIN with Copy Button */}
+                        <div className="text-left">
+                          <label className="text-sm text-gray-300">Your 4-Digit PIN:</label>
+                          <div className="flex items-center gap-3 mt-1">
+                            <div className="text-3xl font-bold text-yellow-400 bg-gray-800/50 px-4 py-2 rounded-lg border border-yellow-400/30 tracking-wider">
+                              {registrationData.password}
+                            </div>
+                            <Button
+                              onClick={copyPinToClipboard}
+                              variant="outline"
+                              size="sm"
+                              className="h-12 px-4 bg-gray-700/50 border-gray-600 text-gray-300 hover:bg-gray-600/50 transition-all duration-200"
+                            >
+                              {copied ? (
+                                <>
+                                  <CheckCircle className="h-4 w-4 mr-2 text-green-400" />
+                                  Copied!
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-4 w-4 mr-2" />
+                                  Copy PIN
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-4 p-3 bg-yellow-900/20 rounded-lg border border-yellow-600/30">
+                        <p className="text-sm text-yellow-200">
+                          💡 <strong>Save these details!</strong> Use your phone number as username and this 4-digit PIN as password to connect.
+                        </p>
+                      </div>
+                    </div>
+
                     <div className="bg-gray-700/50 rounded-lg p-6 space-y-4">
                       <div className="flex items-center justify-center gap-2 text-green-400 mb-3">
                         <MessageCircle className="h-5 w-5" />
                         <span className="font-medium">Welcome SMS Sent!</span>
                       </div>
                       <p className="text-gray-300 text-sm">
-                        We&apos;ve sent your WiFi login credentials to <strong>{registrationData.phone}</strong> via SMS.
+                        We&apos;ve also sent your WiFi login credentials to <strong>{registrationData.phone}</strong> via SMS as backup.
                       </p>
                       <p className="text-gray-400 text-xs">
                         The message includes your username, PIN, and a link to add credit to your account.
@@ -580,10 +655,9 @@ function HotspotRegisterContent() {
                     <div className="bg-blue-900/30 rounded-lg p-4">
                       <h3 className="text-lg font-semibold text-white mb-2">Next Steps:</h3>
                       <ul className="text-sm text-gray-300 space-y-2 text-left">
-                        <li>• Check your SMS for login credentials</li>
-                        <li>• Connect to the WiFi network</li>
-                        <li>• Visit <strong>https://phsweb.app</strong> to add credit</li>
-                        <li>• Start browsing the internet!</li>
+                        <li>• Go to Hotspot Portal</li>
+                        <li>• Enter Phone Number and PIN</li>
+                        <li>• Click connect and be connected</li>
                       </ul>
                     </div>
 
