@@ -26,7 +26,8 @@ import {
   Eye,
   EyeOff,
   Power,
-  PowerOff
+  PowerOff,
+  CreditCard
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -1107,6 +1108,16 @@ export default function HotspotManagementPage() {
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
+                        <Link href={`/admin/locations/${location.id}/plans`}>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="bg-gray-800 border-gray-600 text-white hover:bg-blue-700"
+                            title="Manage Service Plans"
+                          >
+                            <CreditCard className="h-4 w-4" />
+                          </Button>
+                        </Link>
                       </div>
                     </div>
                   </CardContent>
