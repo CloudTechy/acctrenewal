@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PHSWEB Hotspot</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        // Enhanced redirect with CHAP parameters for secure authentication
+        window.location.href = 'http://10.255.0.4:3000/hotspot/gefas01?' + 
+            'link-login=' + encodeURIComponent('$(link-login)') +
+            '&link-orig=' + encodeURIComponent('$(link-orig)') +
+            '&mac=' + encodeURIComponent('$(mac)') +
+            '&ip=' + encodeURIComponent('$(ip)') +
+            '&username=' + encodeURIComponent('$(username)') +
+            '&error=' + encodeURIComponent('$(error)') +
+            '&chap-challenge=' + encodeURIComponent('$(chap-challenge)') +
+            '&chap-id=' + encodeURIComponent('$(chap-id)');
+    </script>
+</head>
+<body>
+    <div style="text-align: center; margin-top: 50px; font-family: Arial, sans-serif;">
+        <h1>🌐 PHSWEB Hotspot</h1>
+        <p>Redirecting to PHSWEB login page...</p>
+        <p style="color: #28a745; font-size: 12px;">🔒 Secure CHAP Authentication Enabled</p>
+        <p>If you are not redirected automatically, <a href="http://10.255.0.4:3000/hotspot/gefas01?test=true">click here for test mode</a>.</p>
+        <div style="margin-top: 20px;">
+            <div style="display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        </div>
+    </div>
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</body>
+</html> 

@@ -784,4 +784,160 @@ export async function getLocationWithOwner(locationId: string): Promise<(Hotspot
 
 export function calculateCommission(amount: number, commissionRate: number): number {
   return Math.round((amount * commissionRate / 100) * 100) / 100; // Round to 2 decimal places
+}
+
+// LOCATION SETTINGS MANAGEMENT FUNCTIONS
+
+/**
+ * Interface for location setting entries
+ */
+export interface LocationSetting {
+  id: string;
+  location_id: string;
+  setting_key: string;
+  setting_value: string;
+  setting_type: 'string' | 'number' | 'boolean' | 'json';
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Get a specific setting value for a location
+ * @param locationId - The location ID to get setting for
+ * @param settingKey - The setting key to retrieve
+ * @returns The setting value as string, or null if not found
+ */
+export async function getLocationSetting(
+  locationId: string, 
+  settingKey: string
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('location_settings')
+      .select('setting_value, setting_type')
+      .eq('location_id', locationId)
+      .eq('setting_key', settingKey)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No rows returned - setting doesn't exist
+        return null;
+      }
+      console.error('Error fetching location setting:', error);
+      return null;
+    }
+
+    return data?.setting_value || null;
+  } catch (error) {
+    console.error('Error in getLocationSetting:', error);
+    return null;
+  }
+}
+
+/**
+ * Set/update a location setting
+ * @param locationId - The location ID to set setting for
+ * @param settingKey - The setting key to set
+ * @param settingValue - The setting value to store
+ * @param settingType - The type of the setting value
+ * @param description - Optional description of the setting
+ * @returns true if successful, false otherwise
+ */
+export async function setLocationSetting(
+  locationId: string,
+  settingKey: string,
+  settingValue: string,
+  settingType: 'string' | 'json' | 'number' | 'boolean' = 'string',
+  description?: string
+): Promise<boolean> {
+  try {
+    // Validate JSON if type is json
+    if (settingType === 'json') {
+      try {
+        JSON.parse(settingValue);
+      } catch (parseError) {
+        console.error('Invalid JSON value provided for setting:', settingKey, parseError);
+        return false;
+      }
+    }
+
+    const { error } = await supabaseAdmin
+      .from('location_settings')
+      .upsert({
+        location_id: locationId,
+        setting_key: settingKey,
+        setting_value: settingValue,
+        setting_type: settingType,
+        description,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'location_id,setting_key'
+      });
+
+    if (error) {
+      console.error('Error setting location setting:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error in setLocationSetting:', error);
+    return false;
+  }
+}
+
+/**
+ * Get all settings for a specific location
+ * @param locationId - The location ID to get settings for
+ * @returns Array of location settings or empty array if none found
+ */
+export async function getLocationSettings(locationId: string): Promise<LocationSetting[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('location_settings')
+      .select('*')
+      .eq('location_id', locationId)
+      .order('setting_key');
+
+    if (error) {
+      console.error('Error fetching location settings:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error in getLocationSettings:', error);
+    return [];
+  }
+}
+
+/**
+ * Delete a specific location setting
+ * @param locationId - The location ID
+ * @param settingKey - The setting key to delete
+ * @returns true if successful, false otherwise
+ */
+export async function deleteLocationSetting(
+  locationId: string,
+  settingKey: string
+): Promise<boolean> {
+  try {
+    const { error } = await supabaseAdmin
+      .from('location_settings')
+      .delete()
+      .eq('location_id', locationId)
+      .eq('setting_key', settingKey);
+
+    if (error) {
+      console.error('Error deleting location setting:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error in deleteLocationSetting:', error);
+    return false;
+  }
 } 

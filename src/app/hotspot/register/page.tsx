@@ -143,28 +143,111 @@ function HotspotRegisterContent() {
   const fetchServicePlans = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/radius/service-plans');
+      
+      // Use location-specific endpoint if we have a locationId
+      const endpoint = registrationData.locationId 
+        ? `/api/locations/${registrationData.locationId}/service-plans`
+        : '/api/radius/service-plans'; // Fallback for backward compatibility
+      
+      console.log(`Fetching service plans from: ${endpoint}`);
+      
+      const response = await fetch(endpoint);
       const data = await response.json();
       
       if (data.success) {
-        // Filter out disabled services (enableservice = "0")
-        const enabledPlans = data.plans.filter((plan: ServicePlan) => plan.enableservice === "1");
+        let enabledPlans;
+        
+        if (registrationData.locationId && data.metadata) {
+          // Location-specific response - plans are already filtered and enabled
+          enabledPlans = data.plans;
+          
+          console.log(
+            `Location ${registrationData.locationId}: ` +
+            `${data.metadata.filtering.filteredPlans} plans available ` +
+            `(${data.metadata.filtering.configurationUsed} configuration)`
+          );
+        } else {
+          // Global response - filter out disabled services
+          enabledPlans = data.plans.filter((plan: ServicePlan) => plan.enableservice === "1");
+          console.log(`Global plans: ${enabledPlans.length} enabled plans available`);
+        }
+        
         setServicePlans(enabledPlans);
         
-        // Auto-select "SOLUDO SOLUTION FREE WIFI" if it exists
-        const solutionPlan = enabledPlans.find((plan: ServicePlan) => 
-          plan.srvname === "SOLUDO SOLUTION FREE WIFI"
-        );
-        if (solutionPlan) {
-          setRegistrationData(prev => ({ ...prev, serviceId: solutionPlan.srvid }));
-        }
+        // Enhanced auto-selection with location awareness
+        await handleLocationSpecificAutoSelection(enabledPlans, registrationData.locationId);
+        
       } else {
-        setError('Failed to load service plans');
+        const errorMessage = registrationData.locationId 
+          ? `Failed to load service plans for this location: ${data.error}`
+          : 'Failed to load service plans';
+        setError(errorMessage);
       }
-    } catch {
-      setError('Error loading service plans');
+    } catch (error) {
+      console.error('Error fetching service plans:', error);
+      const errorMessage = registrationData.locationId
+        ? 'Error loading service plans for this location'
+        : 'Error loading service plans';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Enhanced auto-selection with location awareness
+  const handleLocationSpecificAutoSelection = async (plans: ServicePlan[], locationId?: string) => {
+    if (plans.length === 0) return;
+    
+    try {
+      // First priority: Location-specific default plan setting
+      if (locationId) {
+        const response = await fetch(`/api/locations/${locationId}/service-plans`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.metadata?.defaultPlan) {
+            const defaultPlan = plans.find(plan => plan.srvid === data.metadata.defaultPlan);
+            if (defaultPlan) {
+              setRegistrationData(prev => ({ ...prev, serviceId: defaultPlan.srvid }));
+              console.log(`Auto-selected location default plan: ${defaultPlan.srvname}`);
+              return;
+            }
+          }
+        }
+      }
+      
+      // Second priority: "SOLUDO SOLUTION FREE WIFI" if available
+      const solutionPlan = plans.find((plan: ServicePlan) => 
+        plan.srvname === "SOLUDO SOLUTION FREE WIFI"
+      );
+      if (solutionPlan) {
+        setRegistrationData(prev => ({ ...prev, serviceId: solutionPlan.srvid }));
+        console.log(`Auto-selected SOLUDO plan: ${solutionPlan.srvname}`);
+        return;
+      }
+      
+      // Third priority: Free plan (price = 0)
+      const freePlan = plans.find((plan: ServicePlan) => 
+        parseFloat(plan.unitprice) === 0
+      );
+      if (freePlan) {
+        setRegistrationData(prev => ({ ...prev, serviceId: freePlan.srvid }));
+        console.log(`Auto-selected free plan: ${freePlan.srvname}`);
+        return;
+      }
+      
+      // Fourth priority: First available plan
+      if (plans.length > 0) {
+        setRegistrationData(prev => ({ ...prev, serviceId: plans[0].srvid }));
+        console.log(`Auto-selected first plan: ${plans[0].srvname}`);
+      }
+      
+    } catch (error) {
+      console.error('Error in auto-selection:', error);
+      
+      // Fallback to first plan if there's an error
+      if (plans.length > 0) {
+        setRegistrationData(prev => ({ ...prev, serviceId: plans[0].srvid }));
+      }
     }
   };
 

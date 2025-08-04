@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+// Import MD5 library for CHAP authentication
+import { computeChapResponse } from '@/lib/md5';
 
 // Location-specific configuration from database
 interface LocationInfo {
@@ -57,6 +59,10 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
   const linkLogin = searchParams.get('link-login');
   const linkOrig = searchParams.get('link-orig');
   const errorParam = searchParams.get('error');
+  
+  // CHAP authentication parameters
+  const chapChallenge = searchParams.get('chap-challenge');
+  const chapId = searchParams.get('chap-id');
   
   // Test mode - allows bypassing MikroTik parameter check
   const testMode = searchParams.get('test') === 'true';
@@ -188,6 +194,18 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
         return;
       }
 
+      // Determine authentication method and prepare password
+      let passwordToSend = password;
+      
+      // CHAP Authentication Logic
+      if (chapChallenge && chapId) {
+        // Compute CHAP response: MD5(chap-id + password + chap-challenge)
+        passwordToSend = computeChapResponse(chapId, password, chapChallenge);
+        console.log('🔒 CHAP authentication - password encrypted with MD5');
+      } else {
+        console.log('⚠️ Fallback to plain text authentication');
+      }
+
       // Submit directly to MikroTik's link-login URL
       const form = document.createElement('form');
       form.method = 'POST';
@@ -197,7 +215,7 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
       // Add all form fields
       const fields = {
         username,
-        password,
+        password: passwordToSend, // Either plain text or CHAP hash
         dst: linkOrig || '',
         popup: 'true'
       };
@@ -212,7 +230,8 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
 
       document.body.appendChild(form);
       form.submit();
-    } catch {
+    } catch (error) {
+      console.error('Authentication error:', error);
       setError('Failed to connect. Please try again.');
       setIsLoading(false);
     }
