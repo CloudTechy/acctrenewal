@@ -35,6 +35,7 @@ export interface HotspotLocation {
   show_welcome_message?: boolean
   show_description?: boolean
   show_guest_access?: boolean
+  show_pin_display?: boolean
   created_at: string
   updated_at: string
 }

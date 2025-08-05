@@ -12,18 +12,20 @@ This implementation adds individual toggle controls for each UI element in the h
 - `show_welcome_message` (BOOLEAN) - Toggle welcome message visibility
 - `show_description` (BOOLEAN) - Toggle description text visibility
 - `show_guest_access` (BOOLEAN) - Toggle guest access button visibility
+- `show_pin_display` (BOOLEAN) - Toggle PIN display in registration success (for SMS delivery issues)
 
 ### Migration Required:
-Run `database-migration-display-toggles.sql` to add the new fields with default values of `true` (all elements visible).
+Run `database-migration-display-toggles.sql` to add the new fields. Most default to `true` (visible), except `show_pin_display` which defaults to `false` (hidden until needed).
 
 ## Implementation Details
 
 ### 1. Database Layer (`src/lib/database.ts`)
 - Updated `HotspotLocation` interface with new boolean fields
-- All existing locations default to showing all elements
+- All existing locations default to showing all elements except PIN display
 
-### 2. API Layer (`src/app/api/locations/[locationId]/route.ts`)
-- Enhanced PUT endpoint to handle display toggle updates
+### 2. API Layer 
+- **`src/app/api/locations/[locationId]/route.ts`**: Enhanced PUT endpoint to handle display toggle updates
+- **`src/app/api/locations/[locationId]/details/route.ts`**: Updated to include `show_pin_display` in registration details
 - Supports partial updates for individual toggle states
 
 ### 3. Hotspot Login Page (`src/app/hotspot/[locationId]/page.tsx`)
@@ -31,8 +33,13 @@ Run `database-migration-display-toggles.sql` to add the new fields with default 
 - **Fallback Handling**: Default to visible if toggle value is undefined
 - **Interface Updates**: Added display toggle properties to `LocationInfo` interface
 
-### 4. Admin Interface (`src/app/hotspot/page.tsx`)
-- **Add Location Form**: New "Display Settings" section with 6 toggle switches
+### 4. Registration Success Page (`src/app/hotspot/register/page.tsx`)
+- **PIN Display Control**: Shows 4-digit PIN and Copy button only when `show_pin_display` is enabled
+- **SMS Fallback**: When SMS delivery fails, admins can enable PIN display for manual sharing
+- **Location Context**: Fetches location settings to determine PIN display behavior
+
+### 5. Admin Interface (`src/app/hotspot/page.tsx`)
+- **Add Location Form**: New "Display Settings" section with 7 toggle switches
 - **Edit Location Form**: Same toggle controls for existing locations
 - **Form State Management**: Toggle values included in both new and edit location workflows
 
@@ -52,17 +59,18 @@ Each toggle includes:
 4. **Welcome Message** - Custom greeting text
 5. **Description** - Additional descriptive text
 6. **Guest Access Button** - Quick guest login option
+7. **PIN Display** - 4-digit PIN with copy functionality (registration only)
 
 ## Usage Examples
 
 ### Minimal Clean Look:
-- Hide: Logo, Location Badge, Description, Guest Access
+- Hide: Logo, Location Badge, Description, Guest Access, PIN Display
 - Show: Display Name, Welcome Message
 - Result: Clean, focused login form
 
 ### Business Professional:
 - Show: Logo, Display Name, Description
-- Hide: Location Badge, Welcome Message, Guest Access
+- Hide: Location Badge, Welcome Message, Guest Access, PIN Display
 - Result: Formal, corporate appearance
 
 ### Maximum Simplicity:
@@ -72,8 +80,13 @@ Each toggle includes:
 
 ### Guest-Focused Setup:
 - Show: Logo, Display Name, Guest Access
-- Hide: Location Badge, Welcome Message, Description
+- Hide: Location Badge, Welcome Message, Description, PIN Display
 - Result: Streamlined for guest users
+
+### SMS Delivery Issues Setup:
+- Show: All standard elements + PIN Display
+- Hide: None (full visibility for troubleshooting)
+- Result: PIN visible when SMS fails to deliver
 
 ## Business Benefits
 
@@ -102,6 +115,11 @@ Each toggle includes:
 - Show guest access for public/demo locations
 - Control user experience per location type
 
+### 6. **SMS Fallback Management**
+- Hide PIN display by default for security
+- Enable PIN display when SMS delivery fails
+- Manual PIN sharing for customer support scenarios
+
 ## Technical Architecture
 
 ### Frontend Flow:
@@ -109,12 +127,15 @@ Each toggle includes:
 2. Values saved to database via API
 3. Hotspot login page fetches location data
 4. UI elements conditionally rendered based on toggles
-5. Real-time updates when settings change
+5. Registration page fetches location details including PIN display setting
+6. PIN section shows/hides based on toggle
+7. Real-time updates when settings change
 
 ### Default Behavior:
-- New locations: All elements visible by default
-- Existing locations: All elements visible (migration handles this)
-- Undefined values: Default to visible (fail-safe)
+- New locations: All elements visible by default except PIN display
+- Existing locations: All elements visible except PIN display (migration handles this)
+- PIN Display: Hidden by default, only shown when manually enabled
+- Undefined values: Default to visible (fail-safe) except PIN display
 
 ### Performance Considerations:
 - Minimal overhead (simple boolean checks)
@@ -126,12 +147,13 @@ Each toggle includes:
 ### For Existing Installations:
 1. Run `database-migration-display-toggles.sql`
 2. Deploy updated codebase
-3. Existing locations will show all elements by default
+3. Existing locations will show all elements by default except PIN display
 4. Customize individual locations through admin UI
+5. Enable PIN display only when SMS delivery issues occur
 
 ### For New Installations:
 - All features available immediately
-- Default configuration shows all elements
+- Default configuration shows all elements except PIN display
 - Ready for customization
 
 ## Future Enhancements
@@ -148,5 +170,6 @@ Each toggle includes:
 - **User role visibility**: Show different elements to different user types
 - **Analytics integration**: Track which configurations perform best
 - **Bulk operations**: Apply settings to multiple locations at once
+- **SMS Status Integration**: Auto-enable PIN display when SMS delivery fails
 
 This implementation provides granular control over hotspot login page presentation while maintaining backward compatibility and providing a smooth upgrade path. 

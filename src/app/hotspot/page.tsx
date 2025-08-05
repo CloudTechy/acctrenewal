@@ -66,6 +66,7 @@ interface HotspotLocation {
   show_welcome_message?: boolean;
   show_description?: boolean;
   show_guest_access?: boolean;
+  show_pin_display?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -173,13 +174,14 @@ export default function HotspotManagementPage() {
     contact_phone: '',
     contact_email: '',
     features: ['High-Speed Internet', '24/7 Support', 'Secure Connection'],
-    // Display toggle fields (default to visible)
+    // Display toggle fields (default to visible except PIN display)
     show_logo: true,
     show_location_badge: true,
     show_display_name: true,
     show_welcome_message: true,
     show_description: true,
-    show_guest_access: true
+    show_guest_access: true,
+    show_pin_display: false
   });
 
   const [editLocation, setEditLocation] = useState({
@@ -200,13 +202,14 @@ export default function HotspotManagementPage() {
     contact_phone: '',
     contact_email: '',
     features: ['High-Speed Internet', '24/7 Support', 'Secure Connection'],
-    // Display toggle fields (default to visible)
+    // Display toggle fields (default to visible except PIN display)
     show_logo: true,
     show_location_badge: true,
     show_display_name: true,
     show_welcome_message: true,
     show_description: true,
-    show_guest_access: true
+    show_guest_access: true,
+    show_pin_display: false
   });
   
   const [routerConfig, setRouterConfig] = useState({
@@ -497,7 +500,7 @@ export default function HotspotManagementPage() {
 
       if (data.success) {
         await fetchLocations();
-        setNewLocation({ id: '', name: '', display_name: '', description: '', address: '', city: '', state: '', group_id: 1, default_owner_id: '', registration_enabled: true, welcome_message: '', brand_color_primary: 'from-blue-600 to-purple-600', brand_color_secondary: 'from-blue-50 to-purple-50', contact_phone: '', contact_email: '', features: ['High-Speed Internet', '24/7 Support', 'Secure Connection'], show_logo: true, show_location_badge: true, show_display_name: true, show_welcome_message: true, show_description: true, show_guest_access: true });
+        setNewLocation({ id: '', name: '', display_name: '', description: '', address: '', city: '', state: '', group_id: 1, default_owner_id: '', registration_enabled: true, welcome_message: '', brand_color_primary: 'from-blue-600 to-purple-600', brand_color_secondary: 'from-blue-50 to-purple-50', contact_phone: '', contact_email: '', features: ['High-Speed Internet', '24/7 Support', 'Secure Connection'], show_logo: true, show_location_badge: true, show_display_name: true, show_welcome_message: true, show_description: true, show_guest_access: true, show_pin_display: false });
         setShowAddLocation(false);
       } else {
         setError(data.error || 'Failed to create location');
@@ -532,7 +535,8 @@ export default function HotspotManagementPage() {
         show_display_name: location.show_display_name ?? true,
         show_welcome_message: location.show_welcome_message ?? true,
         show_description: location.show_description ?? true,
-        show_guest_access: location.show_guest_access ?? true
+        show_guest_access: location.show_guest_access ?? true,
+        show_pin_display: location.show_pin_display ?? false
       });
       setShowEditLocation(locationId);
     }
@@ -569,7 +573,8 @@ export default function HotspotManagementPage() {
           show_display_name: editLocation.show_display_name,
           show_welcome_message: editLocation.show_welcome_message,
           show_description: editLocation.show_description,
-          show_guest_access: editLocation.show_guest_access
+          show_guest_access: editLocation.show_guest_access,
+          show_pin_display: editLocation.show_pin_display
         }),
       });
 
@@ -600,7 +605,8 @@ export default function HotspotManagementPage() {
           show_display_name: true,
           show_welcome_message: true,
           show_description: true,
-          show_guest_access: true
+          show_guest_access: true,
+          show_pin_display: false
         });
       } else {
         setError(data.error || 'Failed to update location');
@@ -1490,6 +1496,24 @@ export default function HotspotManagementPage() {
                             <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                           </label>
                         </div>
+
+                        {/* Show PIN Display Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="showPinDisplay" className="text-gray-300">Show PIN Display</Label>
+                            <p className="text-xs text-gray-500">Show PIN when SMS delivery fails</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              id="showPinDisplay"
+                              type="checkbox"
+                              checked={newLocation.show_pin_display}
+                              onChange={(e) => setNewLocation({...newLocation, show_pin_display: e.target.checked})}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1840,6 +1864,24 @@ export default function HotspotManagementPage() {
                               type="checkbox"
                               checked={editLocation.show_guest_access}
                               onChange={(e) => setEditLocation({...editLocation, show_guest_access: e.target.checked})}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+
+                        {/* Show PIN Display Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="editShowPinDisplay" className="text-gray-300">Show PIN Display</Label>
+                            <p className="text-xs text-gray-500">Show PIN when SMS delivery fails</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              id="editShowPinDisplay"
+                              type="checkbox"
+                              checked={editLocation.show_pin_display}
+                              onChange={(e) => setEditLocation({...editLocation, show_pin_display: e.target.checked})}
                               className="sr-only peer"
                             />
                             <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>

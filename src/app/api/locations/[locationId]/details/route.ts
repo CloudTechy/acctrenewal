@@ -53,6 +53,7 @@ export async function GET(
         state: location.state,
         group_id: location.group_id,
         registration_enabled: location.registration_enabled,
+        show_pin_display: location.show_pin_display,
         owner: location.owner ? {
           id: location.owner.id,
           name: location.owner.name,

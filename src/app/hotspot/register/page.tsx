@@ -49,6 +49,7 @@ interface LocationDetails {
   group_id?: number;
   default_owner_id?: string;
   registration_enabled?: boolean;
+  show_pin_display?: boolean;
   owner?: {
     id: string;
     name: string;
@@ -686,33 +687,35 @@ function HotspotRegisterContent() {
                           <div className="text-xl font-bold text-white">{registrationData.phone}</div>
                         </div>
                         
-                        {/* PIN with Copy Button */}
-                        <div className="text-left">
-                          <label className="text-sm text-gray-300">Your 4-Digit PIN:</label>
-                          <div className="flex items-center gap-3 mt-1">
-                            <div className="text-3xl font-bold text-yellow-400 bg-gray-800/50 px-4 py-2 rounded-lg border border-yellow-400/30 tracking-wider">
-                              {registrationData.password}
+                        {/* PIN with Copy Button - only show if PIN display is enabled for this location */}
+                        {locationDetails?.show_pin_display && (
+                          <div className="text-left">
+                            <label className="text-sm text-gray-300">Your 4-Digit PIN:</label>
+                            <div className="flex items-center gap-3 mt-1">
+                              <div className="text-3xl font-bold text-yellow-400 bg-gray-800/50 px-4 py-2 rounded-lg border border-yellow-400/30 tracking-wider">
+                                {registrationData.password}
+                              </div>
+                              <Button
+                                onClick={copyPinToClipboard}
+                                variant="outline"
+                                size="sm"
+                                className="h-12 px-4 bg-gray-700/50 border-gray-600 text-gray-300 hover:bg-gray-600/50 transition-all duration-200"
+                              >
+                                {copied ? (
+                                  <>
+                                    <CheckCircle className="h-4 w-4 mr-2 text-green-400" />
+                                    Copied!
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="h-4 w-4 mr-2" />
+                                    Copy PIN
+                                  </>
+                                )}
+                              </Button>
                             </div>
-                            <Button
-                              onClick={copyPinToClipboard}
-                              variant="outline"
-                              size="sm"
-                              className="h-12 px-4 bg-gray-700/50 border-gray-600 text-gray-300 hover:bg-gray-600/50 transition-all duration-200"
-                            >
-                              {copied ? (
-                                <>
-                                  <CheckCircle className="h-4 w-4 mr-2 text-green-400" />
-                                  Copied!
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="h-4 w-4 mr-2" />
-                                  Copy PIN
-                                </>
-                              )}
-                            </Button>
                           </div>
-                        </div>
+                        )}
                       </div>
                       
                       <div className="mt-4 p-3 bg-yellow-900/20 rounded-lg border border-yellow-600/30">

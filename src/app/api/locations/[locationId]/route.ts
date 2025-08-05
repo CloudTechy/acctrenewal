@@ -63,7 +63,8 @@ export async function PUT(
       show_display_name,
       show_welcome_message,
       show_description,
-      show_guest_access
+      show_guest_access,
+      show_pin_display
     } = body
 
     const updateData: Partial<HotspotLocation> = {}
@@ -89,6 +90,7 @@ export async function PUT(
     if (show_welcome_message !== undefined) updateData.show_welcome_message = show_welcome_message
     if (show_description !== undefined) updateData.show_description = show_description
     if (show_guest_access !== undefined) updateData.show_guest_access = show_guest_access
+    if (show_pin_display !== undefined) updateData.show_pin_display = show_pin_display
 
     const location = await updateHotspotLocation(locationId, updateData)
 
