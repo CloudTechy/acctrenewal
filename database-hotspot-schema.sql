@@ -102,29 +102,36 @@ ALTER TABLE hotspot_stats ENABLE ROW LEVEL SECURITY;
 
 -- Basic RLS policies for hotspot tables
 CREATE POLICY "Allow authenticated users to view hotspot locations" ON hotspot_locations
-    FOR SELECT USING (auth.role() = 'authenticated');
+    FOR SELECT USING ((select auth.role()) = 'authenticated');
 
 CREATE POLICY "Allow authenticated users to view router configs" ON router_configs
-    FOR SELECT USING (auth.role() = 'authenticated');
+    FOR SELECT USING ((select auth.role()) = 'authenticated');
 
-CREATE POLICY "Allow authenticated users to view location settings" ON location_settings
-    FOR SELECT USING (auth.role() = 'authenticated');
+-- Optimized consolidated policies (performance optimized)
+CREATE POLICY "Optimized location settings access" ON location_settings
+    FOR SELECT USING (
+        (select auth.role()) = 'authenticated' 
+        OR ((select auth.jwt()) ->> 'role' = 'service_role')
+    );
 
-CREATE POLICY "Allow authenticated users to view hotspot stats" ON hotspot_stats
-    FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Optimized hotspot stats access" ON hotspot_stats
+    FOR SELECT USING (
+        (select auth.role()) = 'authenticated' 
+        OR ((select auth.jwt()) ->> 'role' = 'service_role')
+    );
 
 -- Allow service role to do everything (for API operations)
 CREATE POLICY "Allow service role full access to hotspot_locations" ON hotspot_locations
-    FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+    FOR ALL USING ((select auth.jwt()) ->> 'role' = 'service_role');
 
 CREATE POLICY "Allow service role full access to router_configs" ON router_configs
-    FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+    FOR ALL USING ((select auth.jwt()) ->> 'role' = 'service_role');
 
 CREATE POLICY "Allow service role full access to location_settings" ON location_settings
-    FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+    FOR INSERT, UPDATE, DELETE USING ((select auth.jwt()) ->> 'role' = 'service_role');
 
 CREATE POLICY "Allow service role full access to hotspot_stats" ON hotspot_stats
-    FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+    FOR INSERT, UPDATE, DELETE USING ((select auth.jwt()) ->> 'role' = 'service_role');
 
 -- Insert initial data for existing Awka location (only if it doesn't exist)
 INSERT INTO hotspot_locations (id, name, display_name, status, city, state) 
