@@ -27,6 +27,13 @@ interface LocationInfo {
     address?: string;
   };
   registration_enabled?: boolean;
+  // Display toggle settings
+  showLogo?: boolean;
+  showLocationBadge?: boolean;
+  showDisplayName?: boolean;
+  showWelcomeMessage?: boolean;
+  showDescription?: boolean;
+  showGuestAccess?: boolean;
 }
 
 // Default fallback configuration
@@ -38,7 +45,14 @@ const defaultLocationInfo: LocationInfo = {
   features: ["Free Internet", "Easy Access", "Secure Connection"],
   brandColor: "from-gray-600 to-slate-600",
   backgroundGradient: "from-gray-50 to-slate-50",
-  registration_enabled: true
+  registration_enabled: true,
+  // Default all display elements to visible
+  showLogo: true,
+  showLocationBadge: true,
+  showDisplayName: true,
+  showWelcomeMessage: true,
+  showDescription: true,
+  showGuestAccess: true
 };
 
 interface HotspotLoginPageProps {
@@ -101,7 +115,13 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
               email: dbLocation.contact_email,
               address: dbLocation.address
             },
-            registration_enabled: dbLocation.registration_enabled !== false
+            registration_enabled: dbLocation.registration_enabled !== false,
+            showLogo: dbLocation.show_logo,
+            showLocationBadge: dbLocation.show_location_badge,
+            showDisplayName: dbLocation.show_display_name,
+            showWelcomeMessage: dbLocation.show_welcome_message,
+            showDescription: dbLocation.show_description,
+            showGuestAccess: dbLocation.show_guest_access !== false
           });
         } else {
           console.warn(`Location ${locationId} not found in database, using default config`);
@@ -275,25 +295,35 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
           <Card className="backdrop-blur-sm bg-gray-800/90 border-gray-700/50 shadow-2xl">
             <CardHeader className="text-center pb-6">
               {/* Logo */}
-              <div className="mx-auto mb-6">
-                <Image
-                  src="/phsweblogo.png"
-                  alt="PHSWEB Logo"
-                  width={80}
-                  height={80}
-                  className="mx-auto"
-                />
-              </div>
+              {locationInfo.showLogo && (
+                <div className="mx-auto mb-6">
+                  <Image
+                    src="/phsweblogo.png"
+                    alt="PHSWEB Logo"
+                    width={80}
+                    height={80}
+                    className="mx-auto"
+                  />
+                </div>
+              )}
 
               {/* Location info */}
-              <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r ${locationInfo.brandColor} text-white text-sm font-medium mb-6`}>
-                <MapPin className="h-4 w-4" />
-                {locationInfo.name}
-              </div>
+              {locationInfo.showLocationBadge && (
+                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r ${locationInfo.brandColor} text-white text-sm font-medium mb-6`}>
+                  <MapPin className="h-4 w-4" />
+                  {locationInfo.name}
+                </div>
+              )}
 
-              <h1 className="text-3xl font-bold text-white mb-3">{locationInfo.displayName}</h1>
-              <p className="text-gray-300 text-lg mb-2">{locationInfo.welcomeMessage}</p>
-              <p className="text-gray-400">{locationInfo.description}</p>
+              {locationInfo.showDisplayName && (
+                <h1 className="text-3xl font-bold text-white mb-3">{locationInfo.displayName}</h1>
+              )}
+              {locationInfo.showWelcomeMessage && (
+                <p className="text-gray-300 text-lg mb-2">{locationInfo.welcomeMessage}</p>
+              )}
+              {locationInfo.showDescription && (
+                <p className="text-gray-400">{locationInfo.description}</p>
+              )}
             </CardHeader>
 
             <CardContent className="space-y-6">
@@ -390,20 +420,22 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
                     )}
 
                     {/* Guest Access Button */}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-12 bg-transparent border-2 border-gray-500/50 text-gray-300 hover:bg-gray-500/10 hover:border-gray-400 transition-all duration-200"
-                      onClick={() => {
-                        setUsername('guest');
-                        setPassword('guest123');
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Wifi className="h-4 w-4" />
-                        Use Guest Access (30mins)
-                      </div>
-                    </Button>
+                    {locationInfo.showGuestAccess && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-12 bg-transparent border-2 border-gray-500/50 text-gray-300 hover:bg-gray-500/10 hover:border-gray-400 transition-all duration-200"
+                        onClick={() => {
+                          setUsername('guest');
+                          setPassword('guest123');
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Wifi className="h-4 w-4" />
+                          Use Guest Access
+                        </div>
+                      </Button>
+                    )}
 
                     {/* Subscription Renewal Button */}
                     <Button

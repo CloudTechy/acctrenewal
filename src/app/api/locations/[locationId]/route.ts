@@ -57,7 +57,13 @@ export async function PUT(
       brand_color_secondary,
       contact_phone,
       contact_email,
-      features
+      features,
+      show_logo,
+      show_location_badge,
+      show_display_name,
+      show_welcome_message,
+      show_description,
+      show_guest_access
     } = body
 
     const updateData: Partial<HotspotLocation> = {}
@@ -77,6 +83,12 @@ export async function PUT(
     if (contact_phone !== undefined) updateData.contact_phone = contact_phone
     if (contact_email !== undefined) updateData.contact_email = contact_email
     if (features !== undefined) updateData.features = features
+    if (show_logo !== undefined) updateData.show_logo = show_logo
+    if (show_location_badge !== undefined) updateData.show_location_badge = show_location_badge
+    if (show_display_name !== undefined) updateData.show_display_name = show_display_name
+    if (show_welcome_message !== undefined) updateData.show_welcome_message = show_welcome_message
+    if (show_description !== undefined) updateData.show_description = show_description
+    if (show_guest_access !== undefined) updateData.show_guest_access = show_guest_access
 
     const location = await updateHotspotLocation(locationId, updateData)
 

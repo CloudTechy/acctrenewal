@@ -59,6 +59,13 @@ interface HotspotLocation {
   contact_phone?: string;
   contact_email?: string;
   features?: string[];
+  // Display toggle fields for UI elements
+  show_logo?: boolean;
+  show_location_badge?: boolean;
+  show_display_name?: boolean;
+  show_welcome_message?: boolean;
+  show_description?: boolean;
+  show_guest_access?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -165,7 +172,14 @@ export default function HotspotManagementPage() {
     brand_color_secondary: 'from-blue-50 to-purple-50',
     contact_phone: '',
     contact_email: '',
-    features: ['High-Speed Internet', '24/7 Support', 'Secure Connection']
+    features: ['High-Speed Internet', '24/7 Support', 'Secure Connection'],
+    // Display toggle fields (default to visible)
+    show_logo: true,
+    show_location_badge: true,
+    show_display_name: true,
+    show_welcome_message: true,
+    show_description: true,
+    show_guest_access: true
   });
 
   const [editLocation, setEditLocation] = useState({
@@ -185,7 +199,14 @@ export default function HotspotManagementPage() {
     brand_color_secondary: 'from-blue-50 to-purple-50',
     contact_phone: '',
     contact_email: '',
-    features: ['High-Speed Internet', '24/7 Support', 'Secure Connection']
+    features: ['High-Speed Internet', '24/7 Support', 'Secure Connection'],
+    // Display toggle fields (default to visible)
+    show_logo: true,
+    show_location_badge: true,
+    show_display_name: true,
+    show_welcome_message: true,
+    show_description: true,
+    show_guest_access: true
   });
   
   const [routerConfig, setRouterConfig] = useState({
@@ -476,7 +497,7 @@ export default function HotspotManagementPage() {
 
       if (data.success) {
         await fetchLocations();
-        setNewLocation({ id: '', name: '', display_name: '', description: '', address: '', city: '', state: '', group_id: 1, default_owner_id: '', registration_enabled: true, welcome_message: '', brand_color_primary: 'from-blue-600 to-purple-600', brand_color_secondary: 'from-blue-50 to-purple-50', contact_phone: '', contact_email: '', features: ['High-Speed Internet', '24/7 Support', 'Secure Connection'] });
+        setNewLocation({ id: '', name: '', display_name: '', description: '', address: '', city: '', state: '', group_id: 1, default_owner_id: '', registration_enabled: true, welcome_message: '', brand_color_primary: 'from-blue-600 to-purple-600', brand_color_secondary: 'from-blue-50 to-purple-50', contact_phone: '', contact_email: '', features: ['High-Speed Internet', '24/7 Support', 'Secure Connection'], show_logo: true, show_location_badge: true, show_display_name: true, show_welcome_message: true, show_description: true, show_guest_access: true });
         setShowAddLocation(false);
       } else {
         setError(data.error || 'Failed to create location');
@@ -505,7 +526,13 @@ export default function HotspotManagementPage() {
         brand_color_secondary: location.brand_color_secondary || 'from-blue-50 to-purple-50',
         contact_phone: location.contact_phone || '',
         contact_email: location.contact_email || '',
-        features: location.features || ['High-Speed Internet', '24/7 Support', 'Secure Connection']
+        features: location.features || ['High-Speed Internet', '24/7 Support', 'Secure Connection'],
+        show_logo: location.show_logo ?? true,
+        show_location_badge: location.show_location_badge ?? true,
+        show_display_name: location.show_display_name ?? true,
+        show_welcome_message: location.show_welcome_message ?? true,
+        show_description: location.show_description ?? true,
+        show_guest_access: location.show_guest_access ?? true
       });
       setShowEditLocation(locationId);
     }
@@ -536,7 +563,13 @@ export default function HotspotManagementPage() {
           brand_color_secondary: editLocation.brand_color_secondary,
           contact_phone: editLocation.contact_phone,
           contact_email: editLocation.contact_email,
-          features: editLocation.features
+          features: editLocation.features,
+          show_logo: editLocation.show_logo,
+          show_location_badge: editLocation.show_location_badge,
+          show_display_name: editLocation.show_display_name,
+          show_welcome_message: editLocation.show_welcome_message,
+          show_description: editLocation.show_description,
+          show_guest_access: editLocation.show_guest_access
         }),
       });
 
@@ -561,7 +594,13 @@ export default function HotspotManagementPage() {
           brand_color_secondary: 'from-blue-50 to-purple-50',
           contact_phone: '',
           contact_email: '',
-          features: ['High-Speed Internet', '24/7 Support', 'Secure Connection']
+          features: ['High-Speed Internet', '24/7 Support', 'Secure Connection'],
+          show_logo: true,
+          show_location_badge: true,
+          show_display_name: true,
+          show_welcome_message: true,
+          show_description: true,
+          show_guest_access: true
         });
       } else {
         setError(data.error || 'Failed to update location');
@@ -1135,11 +1174,16 @@ export default function HotspotManagementPage() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-gray-900 rounded-lg w-full max-w-md border border-gray-700"
+                className="bg-gray-900 rounded-lg w-full max-w-md border border-gray-700 max-h-[90vh] flex flex-col"
             >
-              <div className="p-6">
-                  <h3 className="text-lg font-semibold mb-4 text-white">Add New Hotspot Location</h3>
-                <form onSubmit={handleAddLocation} className="space-y-4">
+              {/* Fixed Header */}
+              <div className="p-6 pb-4 border-b border-gray-700">
+                  <h3 className="text-lg font-semibold text-white">Add New Hotspot Location</h3>
+              </div>
+              
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto px-6 py-4">
+                <form onSubmit={handleAddLocation} id="add-location-form" className="space-y-4">
                   <div>
                       <Label htmlFor="locationId" className="text-gray-300">Location ID</Label>
                     <Input
@@ -1332,20 +1376,146 @@ export default function HotspotManagementPage() {
                       />
                       <p className="text-xs text-gray-500 mt-1">Comma-separated list of features to display</p>
                     </div>
+
+                    {/* Display Settings Section */}
+                    <div className="border-t border-gray-700 pt-4">
+                      <h4 className="text-md font-medium text-white mb-3">Display Settings</h4>
+                      <p className="text-xs text-gray-500 mb-4">Control which elements appear on the login page to reduce clutter</p>
+                      
+                      <div className="grid grid-cols-1 gap-3">
+                        {/* Show Logo Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="showLogo" className="text-gray-300">Show PHSWEB Logo</Label>
+                            <p className="text-xs text-gray-500">Display the company logo at the top</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              id="showLogo"
+                              type="checkbox"
+                              checked={newLocation.show_logo}
+                              onChange={(e) => setNewLocation({...newLocation, show_logo: e.target.checked})}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+
+                        {/* Show Location Badge Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="showLocationBadge" className="text-gray-300">Show Location Badge</Label>
+                            <p className="text-xs text-gray-500">Display the location name badge</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              id="showLocationBadge"
+                              type="checkbox"
+                              checked={newLocation.show_location_badge}
+                              onChange={(e) => setNewLocation({...newLocation, show_location_badge: e.target.checked})}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+
+                        {/* Show Display Name Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="showDisplayName" className="text-gray-300">Show Display Name</Label>
+                            <p className="text-xs text-gray-500">Display the main location title</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              id="showDisplayName"
+                              type="checkbox"
+                              checked={newLocation.show_display_name}
+                              onChange={(e) => setNewLocation({...newLocation, show_display_name: e.target.checked})}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+
+                        {/* Show Welcome Message Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="showWelcomeMessage" className="text-gray-300">Show Welcome Message</Label>
+                            <p className="text-xs text-gray-500">Display the custom welcome text</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              id="showWelcomeMessage"
+                              type="checkbox"
+                              checked={newLocation.show_welcome_message}
+                              onChange={(e) => setNewLocation({...newLocation, show_welcome_message: e.target.checked})}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+
+                        {/* Show Description Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="showDescription" className="text-gray-300">Show Description</Label>
+                            <p className="text-xs text-gray-500">Display the location description text</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              id="showDescription"
+                              type="checkbox"
+                              checked={newLocation.show_description}
+                              onChange={(e) => setNewLocation({...newLocation, show_description: e.target.checked})}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+
+                        {/* Show Guest Access Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="showGuestAccess" className="text-gray-300">Show Guest Access</Label>
+                            <p className="text-xs text-gray-500">Display the guest access button</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              id="showGuestAccess"
+                              type="checkbox"
+                              checked={newLocation.show_guest_access}
+                              onChange={(e) => setNewLocation({...newLocation, show_guest_access: e.target.checked})}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   
-                  <div className="flex gap-3 pt-4">
-                      <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700">Add Location</Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => setShowAddLocation(false)}
-                        className="flex-1 bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
                 </form>
+              </div>
+              
+              {/* Fixed Footer */}
+              <div className="p-6 pt-4 border-t border-gray-700">
+                <div className="flex gap-3">
+                  <Button 
+                    type="submit" 
+                    form="add-location-form"
+                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  >
+                    Add Location
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setShowAddLocation(false)}
+                    className="flex-1 bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
             </motion.div>
           </div>
@@ -1360,11 +1530,16 @@ export default function HotspotManagementPage() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-gray-900 rounded-lg w-full max-w-md border border-gray-700"
+              className="bg-gray-900 rounded-lg w-full max-w-md border border-gray-700 max-h-[90vh] flex flex-col"
             >
-              <div className="p-6">
-                <h3 className="text-lg font-semibold mb-4 text-white">Edit Hotspot Location</h3>
-                <form onSubmit={handleSaveEditLocation} className="space-y-4">
+              {/* Fixed Header */}
+              <div className="p-6 pb-4 border-b border-gray-700">
+                <h3 className="text-lg font-semibold text-white">Edit Hotspot Location</h3>
+              </div>
+              
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto px-6 py-4">
+                <form onSubmit={handleSaveEditLocation} id="edit-location-form" className="space-y-4">
                   <div>
                     <Label htmlFor="editLocationName" className="text-gray-300">Location Name</Label>
                     <Input
@@ -1556,23 +1731,147 @@ export default function HotspotManagementPage() {
                       />
                       <p className="text-xs text-gray-500 mt-1">Comma-separated list of features to display</p>
                     </div>
+
+                    {/* Display Settings Section */}
+                    <div className="border-t border-gray-700 pt-4">
+                      <h4 className="text-md font-medium text-white mb-3">Display Settings</h4>
+                      <p className="text-xs text-gray-500 mb-4">Control which elements appear on the login page to reduce clutter</p>
+                      
+                      <div className="grid grid-cols-1 gap-3">
+                        {/* Show Logo Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="editShowLogo" className="text-gray-300">Show PHSWEB Logo</Label>
+                            <p className="text-xs text-gray-500">Display the company logo at the top</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              id="editShowLogo"
+                              type="checkbox"
+                              checked={editLocation.show_logo}
+                              onChange={(e) => setEditLocation({...editLocation, show_logo: e.target.checked})}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+
+                        {/* Show Location Badge Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="editShowLocationBadge" className="text-gray-300">Show Location Badge</Label>
+                            <p className="text-xs text-gray-500">Display the location name badge</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              id="editShowLocationBadge"
+                              type="checkbox"
+                              checked={editLocation.show_location_badge}
+                              onChange={(e) => setEditLocation({...editLocation, show_location_badge: e.target.checked})}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+
+                        {/* Show Display Name Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="editShowDisplayName" className="text-gray-300">Show Display Name</Label>
+                            <p className="text-xs text-gray-500">Display the main location title</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              id="editShowDisplayName"
+                              type="checkbox"
+                              checked={editLocation.show_display_name}
+                              onChange={(e) => setEditLocation({...editLocation, show_display_name: e.target.checked})}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+
+                        {/* Show Welcome Message Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="editShowWelcomeMessage" className="text-gray-300">Show Welcome Message</Label>
+                            <p className="text-xs text-gray-500">Display the custom welcome text</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              id="editShowWelcomeMessage"
+                              type="checkbox"
+                              checked={editLocation.show_welcome_message}
+                              onChange={(e) => setEditLocation({...editLocation, show_welcome_message: e.target.checked})}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+
+                        {/* Show Description Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="editShowDescription" className="text-gray-300">Show Description</Label>
+                            <p className="text-xs text-gray-500">Display the location description text</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              id="editShowDescription"
+                              type="checkbox"
+                              checked={editLocation.show_description}
+                              onChange={(e) => setEditLocation({...editLocation, show_description: e.target.checked})}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+
+                        {/* Show Guest Access Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="editShowGuestAccess" className="text-gray-300">Show Guest Access</Label>
+                            <p className="text-xs text-gray-500">Display the guest access button</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              id="editShowGuestAccess"
+                              type="checkbox"
+                              checked={editLocation.show_guest_access}
+                              onChange={(e) => setEditLocation({...editLocation, show_guest_access: e.target.checked})}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   
-                  <div className="flex gap-3 pt-4">
-                    <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700">
-                      <Save className="h-4 w-4 mr-2" />
-                      Save Changes
-                    </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => setShowEditLocation(null)}
-                      className="flex-1 bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
                 </form>
+              </div>
+              
+              {/* Fixed Footer */}
+              <div className="p-6 pt-4 border-t border-gray-700">
+                <div className="flex gap-3">
+                  <Button 
+                    type="submit" 
+                    form="edit-location-form"
+                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Changes
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setShowEditLocation(null)}
+                    className="flex-1 bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
             </motion.div>
           </div>

@@ -28,6 +28,13 @@ export interface HotspotLocation {
   contact_phone?: string
   contact_email?: string
   features?: string[] // JSON array stored as JSONB in database
+  // Display toggle fields for UI elements
+  show_logo?: boolean
+  show_location_badge?: boolean
+  show_display_name?: boolean
+  show_welcome_message?: boolean
+  show_description?: boolean
+  show_guest_access?: boolean
   created_at: string
   updated_at: string
 }
