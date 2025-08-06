@@ -1,7 +1,72 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLocationWithOwner, createHotspotCustomer } from '@/lib/database';
+import { getLocationWithOwner, createHotspotCustomer, getAccountCreationPricingConfig } from '@/lib/database';
 import { calculateServiceExpiry, calculateTrialExpiry } from '@/lib/date-utils';
 import { generateHotspotPassword } from '@/lib/password-utils';
+import { supabaseAdmin } from '@/lib/supabase';
+
+// Enhanced payment verification function for combined payments
+async function verifyAccountCreationPayment(reference: string): Promise<{
+  success: boolean; 
+  error?: string;
+  servicePlanDetails?: {
+    srvid: number;
+    srvname: string;
+    timeunitexp: number;
+    trafficunitcomb: number;
+    limitcomb: number;
+  };
+}> {
+  try {
+    // Check if successful transaction exists for this reference
+    const { data: transactions, error } = await supabaseAdmin
+      .from('renewal_transactions')
+      .select('*')
+      .eq('paystack_reference', reference)
+      .eq('payment_status', 'success')
+      .order('created_at', { ascending: false });
+
+    if (error || !transactions || transactions.length === 0) {
+      return { 
+        success: false, 
+        error: 'No valid payment found for this reference' 
+      };
+    }
+
+    // Check for account creation transaction
+    const accountCreationTransaction = transactions.find(t => t.transaction_type === 'account_creation');
+    if (!accountCreationTransaction) {
+      return { 
+        success: false, 
+        error: 'Account creation payment not found' 
+      };
+    }
+
+    // Check for service plan transaction (combined payment)
+    const servicePlanTransaction = transactions.find(t => 
+      t.transaction_type === 'renewal' && t.service_plan_id > 0
+    );
+
+    if (servicePlanTransaction) {
+      // Combined payment - return service plan details
+      return { 
+        success: true,
+        servicePlanDetails: {
+          srvid: servicePlanTransaction.service_plan_id || 0,
+          srvname: servicePlanTransaction.service_plan_name || 'Unknown Plan',
+          timeunitexp: servicePlanTransaction.renewal_period_days || 0,
+          trafficunitcomb: 0, // Will be fetched from RADIUS if needed
+          limitcomb: 0 // Will be fetched from RADIUS if needed
+        }
+      };
+    }
+
+    // Account creation only payment
+    return { success: true };
+  } catch (error) {
+    console.error('Error verifying account creation payment:', error);
+    return { success: false, error: 'Database error during payment verification' };
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,7 +85,8 @@ export async function POST(request: NextRequest) {
       srvid,
       enabled = 1,
       acctype = 0,
-      locationId // New: location context
+      locationId, // New: location context
+      paymentReference // New: payment reference for paid accounts
     } = userData;
 
     // Validate required fields
@@ -33,9 +99,17 @@ export async function POST(request: NextRequest) {
 
     // Fetch location details if locationId is provided
     let locationData = null;
+    let pricingConfig = null;
+    let paymentServicePlanDetails = null; // Store service plan details from payment verification
+    
     if (locationId) {
       try {
-        locationData = await getLocationWithOwner(locationId);
+        // Get both location data and pricing configuration
+        [locationData, pricingConfig] = await Promise.all([
+          getLocationWithOwner(locationId),
+          getAccountCreationPricingConfig(locationId)
+        ]);
+        
         if (!locationData) {
           return NextResponse.json(
             { error: 'Location not found' },
@@ -50,6 +124,75 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
+
+        // Check if account creation pricing is enabled
+        if (pricingConfig.enabled) {
+          // If pricing is enabled, payment reference is required
+          if (!paymentReference) {
+            return NextResponse.json(
+              { 
+                error: 'Payment required for account creation at this location',
+                requiresPayment: true,
+                pricingConfig: {
+                  price: pricingConfig.price,
+                  description: pricingConfig.description
+                }
+              },
+              { status: 402 } // Payment Required
+            );
+          }
+
+          // Verify payment was successful and get service plan details if combined
+          try {
+            const paymentVerification = await verifyAccountCreationPayment(paymentReference);
+            if (!paymentVerification.success) {
+              return NextResponse.json(
+                { 
+                  error: 'Payment verification failed. Please complete payment before creating account.',
+                  requiresPayment: true,
+                  paymentError: paymentVerification.error
+                },
+                { status: 402 }
+              );
+            }
+
+            console.log('Account creation payment verified:', paymentReference);
+
+            // Store service plan details from payment for later use
+            if (paymentVerification.servicePlanDetails) {
+              paymentServicePlanDetails = paymentVerification.servicePlanDetails;
+              console.log('Combined payment detected - service plan from payment:', paymentServicePlanDetails);
+              
+              // Validate service plan from payment matches the requested srvid (security check)
+              if (srvid && paymentServicePlanDetails.srvid.toString() !== srvid) {
+                console.warn(`Service plan mismatch: paid for ${paymentServicePlanDetails.srvid} but requesting ${srvid}`);
+                return NextResponse.json(
+                  { 
+                    error: 'Service plan mismatch. The service plan you paid for does not match the requested plan.',
+                    requiresPayment: true,
+                    paidServicePlan: {
+                      id: paymentServicePlanDetails.srvid,
+                      name: paymentServicePlanDetails.srvname
+                    }
+                  },
+                  { status: 400 }
+                );
+              }
+            }
+
+          } catch (paymentError) {
+            console.error('Error verifying account creation payment:', paymentError);
+            return NextResponse.json(
+              { 
+                error: 'Unable to verify payment. Please try again.',
+                requiresPayment: true,
+                details: paymentError instanceof Error ? paymentError.message : 'Unknown payment verification error'
+              },
+              { status: 500 }
+            );
+          }
+        }
+
       } catch (error) {
         console.error('Error fetching location data:', error);
         return NextResponse.json(
@@ -86,11 +229,15 @@ export async function POST(request: NextRequest) {
     // Extract base URL without the specific endpoint
     const radiusBaseUrl = baseUrl.replace('/api/sysapi.php', '');
 
-    // Calculate expiry date - use trial expiry (00:00:00 of current day) as default
-    // Respect service plan duration only if explicitly configured (including 0 days for data-only plans)
+    // Calculate expiry date - prioritize service plan from payment verification for combined payments
     let expiryDate;
     
-    if (servicePlan && servicePlan.timeunitexp !== undefined) {
+    if (paymentServicePlanDetails && paymentServicePlanDetails.timeunitexp > 0) {
+      // Combined payment with service plan - use the paid service plan duration
+      expiryDate = calculateServiceExpiry(null, paymentServicePlanDetails.timeunitexp);
+      console.log(`Using paid service plan expiry: ${paymentServicePlanDetails.timeunitexp} days`);
+    } else if (servicePlan && servicePlan.timeunitexp !== undefined) {
+      // Regular service plan (no payment or account creation only payment)
       const planDays = parseInt(servicePlan.timeunitexp);
       if (!isNaN(planDays) && planDays >= 0) {
         // Use service plan duration (including 0 for data-only plans)

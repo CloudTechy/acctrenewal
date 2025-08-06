@@ -3,7 +3,8 @@ import {
   getHotspotLocation, 
   updateHotspotLocation, 
   deleteHotspotLocation,
-  HotspotLocation 
+  HotspotLocation,
+  setAccountCreationPricingConfig
 } from '@/lib/database'
 
 export async function GET(
@@ -64,7 +65,11 @@ export async function PUT(
       show_welcome_message,
       show_description,
       show_guest_access,
-      show_pin_display
+      show_pin_display,
+      // NEW: Account creation pricing settings
+      account_creation_pricing_enabled,
+      account_creation_price,
+      account_creation_description
     } = body
 
     const updateData: Partial<HotspotLocation> = {}
@@ -92,6 +97,7 @@ export async function PUT(
     if (show_guest_access !== undefined) updateData.show_guest_access = show_guest_access
     if (show_pin_display !== undefined) updateData.show_pin_display = show_pin_display
 
+    // Update the location in the database
     const location = await updateHotspotLocation(locationId, updateData)
 
     if (!location) {
@@ -101,14 +107,58 @@ export async function PUT(
       )
     }
 
+    // NEW: Handle account creation pricing settings separately
+    if (account_creation_pricing_enabled !== undefined || 
+        account_creation_price !== undefined || 
+        account_creation_description !== undefined) {
+      
+      const pricingConfig: {
+        enabled?: boolean;
+        price?: number;
+        description?: string;
+      } = {};
+      
+      if (account_creation_pricing_enabled !== undefined) {
+        pricingConfig.enabled = account_creation_pricing_enabled;
+      }
+      
+      if (account_creation_price !== undefined) {
+        // Validate price is a positive number
+        const price = parseFloat(account_creation_price);
+        if (isNaN(price) || price < 0) {
+          return NextResponse.json(
+            { success: false, error: 'Invalid price value. Must be a positive number.' },
+            { status: 400 }
+          );
+        }
+        pricingConfig.price = price;
+      }
+      
+      if (account_creation_description !== undefined) {
+        pricingConfig.description = account_creation_description;
+      }
+
+      // Save pricing configuration
+      const pricingSuccess = await setAccountCreationPricingConfig(locationId, pricingConfig);
+      
+      if (!pricingSuccess) {
+        return NextResponse.json(
+          { success: false, error: 'Failed to update account creation pricing settings' },
+          { status: 500 }
+        );
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      data: location
+      message: 'Location updated successfully',
+      location
     })
+
   } catch (error) {
-    console.error('Error in PUT /api/locations/[locationId]:', error)
+    console.error('Error updating location:', error)
     return NextResponse.json(
-      { success: false, error: 'Failed to update location' },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }

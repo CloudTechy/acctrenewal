@@ -949,3 +949,144 @@ export async function deleteLocationSetting(
     return false;
   }
 } 
+
+// ACCOUNT CREATION PRICING HELPER FUNCTIONS
+
+/**
+ * Interface for account creation pricing configuration
+ */
+export interface AccountCreationPricingConfig {
+  enabled: boolean;
+  price: number;
+  description: string;
+  locationId: string;
+}
+
+/**
+ * Get account creation pricing configuration for a location
+ * @param locationId - The location ID to get pricing config for
+ * @returns AccountCreationPricingConfig object with pricing settings
+ */
+export async function getAccountCreationPricingConfig(
+  locationId: string
+): Promise<AccountCreationPricingConfig> {
+  try {
+    // Get all pricing-related settings for the location
+    const settings = await Promise.all([
+      getLocationSetting(locationId, 'account_creation_pricing_enabled'),
+      getLocationSetting(locationId, 'account_creation_price'),
+      getLocationSetting(locationId, 'account_creation_description')
+    ]);
+
+    const [enabledSetting, priceSetting, descriptionSetting] = settings;
+
+    // Parse and return configuration
+    return {
+      enabled: enabledSetting === 'true',
+      price: priceSetting ? parseFloat(priceSetting) : 0,
+      description: descriptionSetting || '',
+      locationId
+    };
+  } catch (error) {
+    console.error('Error fetching account creation pricing config:', error);
+    return {
+      enabled: false,
+      price: 0,
+      description: '',
+      locationId
+    };
+  }
+}
+
+/**
+ * Set account creation pricing configuration for a location
+ * @param locationId - The location ID to set pricing config for
+ * @param config - The pricing configuration to set
+ * @returns true if successful, false otherwise
+ */
+export async function setAccountCreationPricingConfig(
+  locationId: string,
+  config: Partial<AccountCreationPricingConfig>
+): Promise<boolean> {
+  try {
+    const operations = [];
+
+    // Set enabled status if provided
+    if (config.enabled !== undefined) {
+      operations.push(
+        setLocationSetting(
+          locationId,
+          'account_creation_pricing_enabled',
+          config.enabled.toString(),
+          'boolean',
+          'Enable paid account creation for this location'
+        )
+      );
+    }
+
+    // Set price if provided
+    if (config.price !== undefined) {
+      operations.push(
+        setLocationSetting(
+          locationId,
+          'account_creation_price',
+          config.price.toString(),
+          'number',
+          'Price in Naira for creating a new account at this location'
+        )
+      );
+    }
+
+    // Set description if provided
+    if (config.description !== undefined) {
+      operations.push(
+        setLocationSetting(
+          locationId,
+          'account_creation_description',
+          config.description,
+          'string',
+          'Description shown to users about the account creation fee'
+        )
+      );
+    }
+
+    // Execute all operations
+    const results = await Promise.all(operations);
+    
+    // Return true only if all operations succeeded
+    return results.every(result => result === true);
+  } catch (error) {
+    console.error('Error setting account creation pricing config:', error);
+    return false;
+  }
+}
+
+/**
+ * Check if account creation pricing is enabled for a location
+ * @param locationId - The location ID to check
+ * @returns true if pricing is enabled, false otherwise
+ */
+export async function isAccountCreationPricingEnabled(locationId: string): Promise<boolean> {
+  try {
+    const config = await getAccountCreationPricingConfig(locationId);
+    return config.enabled;
+  } catch (error) {
+    console.error('Error checking account creation pricing status:', error);
+    return false;
+  }
+}
+
+/**
+ * Get account creation price for a location
+ * @param locationId - The location ID to get price for
+ * @returns price in Naira, or 0 if pricing is disabled or not configured
+ */
+export async function getAccountCreationPrice(locationId: string): Promise<number> {
+  try {
+    const config = await getAccountCreationPricingConfig(locationId);
+    return config.enabled ? config.price : 0;
+  } catch (error) {
+    console.error('Error getting account creation price:', error);
+    return 0;
+  }
+} 

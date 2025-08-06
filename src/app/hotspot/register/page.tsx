@@ -38,6 +38,9 @@ interface ServicePlan {
   timebaseexp: string;
   timeunitexp: string;
   enableservice: string;
+  unitpriceadd?: string; // Added for combined pricing
+  unitpricetax?: string; // Added for combined pricing
+  unitpriceaddtax?: string; // Added for combined pricing
 }
 
 interface LocationDetails {
@@ -68,6 +71,12 @@ interface RegistrationData {
   serviceId: string;
   password: string;
   locationId: string;
+  // NEW: Payment-related fields
+  paymentReference?: string;
+  selectedServicePlan?: ServicePlan;
+  accountCreationFee?: number;
+  servicePlanPrice?: number;
+  totalAmount?: number;
 }
 
 const steps = [
@@ -85,6 +94,14 @@ function HotspotRegisterContent() {
   const [servicePlans, setServicePlans] = useState<ServicePlan[]>([]);
   const [locationDetails, setLocationDetails] = useState<LocationDetails | null>(null);
   const [copied, setCopied] = useState(false);
+  // NEW: Pricing and payment state
+  const [pricingConfig, setPricingConfig] = useState<{
+    enabled: boolean;
+    price: number;
+    description: string;
+  } | null>(null);
+  const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
+  const [paymentStep, setPaymentStep] = useState<'selection' | 'payment' | 'verification'>('selection');
   const [registrationData, setRegistrationData] = useState<RegistrationData>({
     phone: '',
     firstName: '',
@@ -98,6 +115,37 @@ function HotspotRegisterContent() {
     locationId: searchParams.get('location') || ''
   });
 
+  // Check for payment reference in URL when component mounts
+  useEffect(() => {
+    const locationId = searchParams.get('location');
+    const paymentReference = searchParams.get('payment_reference');
+    
+    if (locationId) {
+      setRegistrationData(prev => ({ 
+        ...prev, 
+        locationId,
+        paymentReference: paymentReference || undefined
+      }));
+      fetchLocationDetails(locationId);
+    }
+
+    // If returning from payment, set appropriate step
+    if (paymentReference) {
+      setPaymentStep('verification');
+      // Auto-populate form if we have the data in sessionStorage
+      const savedFormData = sessionStorage.getItem('registrationFormData');
+      if (savedFormData) {
+        try {
+          const formData = JSON.parse(savedFormData);
+          setRegistrationData(prev => ({ ...prev, ...formData, paymentReference }));
+          setCurrentStep(3); // Go to service plan step to complete registration
+        } catch (error) {
+          console.error('Error parsing saved form data:', error);
+        }
+      }
+    }
+  }, [searchParams]);
+
   // Fetch location details when component mounts
   useEffect(() => {
     const locationId = searchParams.get('location');
@@ -110,22 +158,53 @@ function HotspotRegisterContent() {
   // Fetch location details including owner information
   const fetchLocationDetails = async (locationId: string) => {
     try {
-      const response = await fetch(`/api/locations/${locationId}/details`);
+      setIsLoading(true);
+      const response = await fetch(`/api/locations/${locationId}`);
       const data = await response.json();
       
       if (data.success) {
         setLocationDetails(data.location);
-        
-        // Check if registration is enabled for this location
-        if (!data.location.registration_enabled) {
-          setError('Registration is currently disabled for this location. Please contact support.');
-        }
+        // NEW: Fetch pricing configuration
+        fetchPricingConfiguration(locationId);
       } else {
-        setError('Location not found or invalid.');
+        setError('Failed to load location details');
       }
-    } catch (err) {
-      console.error('Error fetching location details:', err);
-      setError('Failed to load location information.');
+    } catch (error) {
+      console.error('Error fetching location details:', error);
+      setError('Error loading location details');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // NEW: Fetch account creation pricing configuration
+  const fetchPricingConfiguration = async (locationId: string) => {
+    try {
+      const response = await fetch(`/api/locations/${locationId}/pricing`);
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        setPricingConfig({
+          enabled: data.data.enabled,
+          price: data.data.price,
+          description: data.data.description
+        });
+      } else {
+        // If pricing API fails, assume pricing is disabled
+        setPricingConfig({
+          enabled: false,
+          price: 0,
+          description: 'Free account creation'
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching pricing configuration:', error);
+      // Fallback to disabled pricing
+      setPricingConfig({
+        enabled: false,
+        price: 0,
+        description: 'Free account creation'
+      });
     }
   };
 
@@ -297,7 +376,8 @@ function HotspotRegisterContent() {
           state: registrationData.state,
           phone: registrationData.phone,
           srvid: registrationData.serviceId,
-          locationId: registrationData.locationId
+          locationId: registrationData.locationId,
+          paymentReference: registrationData.paymentReference
         })
       });
       
@@ -336,6 +416,70 @@ function HotspotRegisterContent() {
     }
   };
 
+  // NEW: Initiate combined payment
+  const initiatePayment = async () => {
+    if (!registrationData.selectedServicePlan || !pricingConfig?.enabled) {
+      setError('Invalid payment configuration');
+      return;
+    }
+
+    try {
+      setIsPaymentProcessing(true);
+      setError(null);
+
+      // Save form data to sessionStorage before redirect
+      sessionStorage.setItem('registrationFormData', JSON.stringify({
+        phone: registrationData.phone,
+        firstName: registrationData.firstName,
+        lastName: registrationData.lastName,
+        email: registrationData.email,
+        address: registrationData.address,
+        city: registrationData.city,
+        state: registrationData.state,
+        serviceId: registrationData.serviceId,
+        selectedServicePlan: registrationData.selectedServicePlan,
+        servicePlanPrice: registrationData.servicePlanPrice,
+        accountCreationFee: registrationData.accountCreationFee,
+        totalAmount: registrationData.totalAmount
+      }));
+
+      const paymentData = {
+        locationId: registrationData.locationId,
+        userInfo: {
+          firstName: registrationData.firstName,
+          lastName: registrationData.lastName,
+          email: registrationData.email,
+          phone: registrationData.phone
+        },
+        servicePlanId: parseInt(registrationData.serviceId),
+        action: 'initiate'
+      };
+
+      const response = await fetch('/api/account-creation/payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(paymentData)
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Redirect to Paystack payment page
+        window.location.href = data.data.authorization_url;
+      } else {
+        setError(data.error || 'Failed to initiate payment');
+        // Clear saved data on error
+        sessionStorage.removeItem('registrationFormData');
+      }
+    } catch (error) {
+      console.error('Payment initiation error:', error);
+      setError('Error initiating payment');
+      sessionStorage.removeItem('registrationFormData');
+    } finally {
+      setIsPaymentProcessing(false);
+    }
+  };
+
   const handleNext = () => {
     setError(null);
     
@@ -356,7 +500,16 @@ function HotspotRegisterContent() {
         setError('Please select a service plan');
         return;
       }
-      submitRegistration();
+      
+      // NEW: Check if payment is required
+      if (pricingConfig?.enabled) {
+        // Initiate payment process
+        setPaymentStep('payment');
+        initiatePayment();
+      } else {
+        // Proceed with free registration
+        submitRegistration();
+      }
     }
   };
 
@@ -621,38 +774,77 @@ function HotspotRegisterContent() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
-                        {servicePlans.map((plan) => (
-                          <div
-                            key={plan.srvid}
-                            className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                              registrationData.serviceId === plan.srvid
-                                ? 'border-blue-500 bg-blue-500/10'
-                                : 'border-gray-600 bg-gray-700/30 hover:border-gray-500'
-                            }`}
-                            onClick={() => setRegistrationData(prev => ({ ...prev, serviceId: plan.srvid }))}
-                          >
-                            <div className="flex items-center justify-between mb-3">
-                              <h3 className="font-semibold text-white">{plan.srvname}</h3>
-                              <div className={`w-4 h-4 rounded-full border-2 ${
+                        {servicePlans.map((plan) => {
+                          const planPrice = parseFloat(plan.unitprice) + parseFloat(plan.unitpriceadd || '0') + 
+                                          parseFloat(plan.unitpricetax || '0') + parseFloat(plan.unitpriceaddtax || '0');
+                          const totalCost = pricingConfig?.enabled ? pricingConfig.price + planPrice : planPrice;
+                          
+                          return (
+                            <div
+                              key={plan.srvid}
+                              className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
                                 registrationData.serviceId === plan.srvid
-                                  ? 'border-blue-500 bg-blue-500'
-                                  : 'border-gray-500'
-                              }`}>
-                                {registrationData.serviceId === plan.srvid && (
-                                  <Check className="h-3 w-3 text-white" />
+                                  ? 'border-blue-500 bg-blue-500/10'
+                                  : 'border-gray-600 bg-gray-700/30 hover:border-gray-500'
+                              }`}
+                              onClick={() => {
+                                setRegistrationData(prev => ({ 
+                                  ...prev, 
+                                  serviceId: plan.srvid,
+                                  selectedServicePlan: plan,
+                                  servicePlanPrice: planPrice,
+                                  accountCreationFee: pricingConfig?.enabled ? pricingConfig.price : 0,
+                                  totalAmount: totalCost
+                                }));
+                              }}
+                            >
+                              <div className="flex items-center justify-between mb-3">
+                                <h3 className="font-semibold text-white">{plan.srvname}</h3>
+                                <div className={`w-4 h-4 rounded-full border-2 ${
+                                  registrationData.serviceId === plan.srvid
+                                    ? 'border-blue-500 bg-blue-500'
+                                    : 'border-gray-500'
+                                }`}>
+                                  {registrationData.serviceId === plan.srvid && (
+                                    <Check className="h-3 w-3 text-white" />
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <p className="text-gray-400 text-sm mb-3">{plan.descr}</p>
+                              
+                              <div className="space-y-2">
+                                {/* Service Plan Price */}
+                                <div className="flex justify-between items-center text-sm">
+                                  <span className="text-gray-300">Service Plan:</span>
+                                  <span className="text-white font-medium">
+                                    {formatCurrency(planPrice.toString())}
+                                  </span>
+                                </div>
+                                
+                                {/* Account Creation Fee (if enabled) */}
+                                {pricingConfig?.enabled && (
+                                  <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-300">Account Setup:</span>
+                                    <span className="text-white font-medium">
+                                      {formatCurrency(pricingConfig.price.toString())}
+                                    </span>
+                                  </div>
                                 )}
+                                
+                                {/* Total Cost */}
+                                <div className="pt-2 mt-3 border-t border-gray-600">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-lg font-bold text-white">Total:</span>
+                                    <span className="text-lg font-bold text-blue-400">
+                                      {formatCurrency(totalCost.toString())}
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                            
-                            <p className="text-gray-400 text-sm mb-3">{plan.descr}</p>
-                            
-                            <div className="mt-3 pt-3 border-t border-gray-600">
-                              <div className="text-lg font-bold text-white">
-                                {formatCurrency(plan.unitprice)}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </motion.div>
@@ -787,14 +979,18 @@ function HotspotRegisterContent() {
                   
                   <Button
                     onClick={handleNext}
-                    disabled={isLoading}
+                    disabled={isLoading || isPaymentProcessing}
                     className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 transition-all duration-200"
                   >
-                    {isLoading ? (
+                    {isLoading || isPaymentProcessing ? (
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     ) : (
                       <>
-                        {currentStep === 3 ? 'Create Account' : 'Continue'}
+                        {currentStep === 3 ? (
+                          pricingConfig?.enabled && paymentStep === 'selection' ? 
+                          `Pay ₦${registrationData.totalAmount?.toLocaleString() || '0'} & Create Account` :
+                          'Create Account'
+                        ) : 'Continue'}
                         {currentStep < 3 && <ArrowRight className="h-4 w-4 ml-2" />}
                       </>
                     )}

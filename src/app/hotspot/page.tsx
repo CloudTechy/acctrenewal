@@ -67,6 +67,10 @@ interface HotspotLocation {
   show_description?: boolean;
   show_guest_access?: boolean;
   show_pin_display?: boolean;
+  // NEW: Account creation pricing fields
+  account_creation_pricing_enabled?: boolean;
+  account_creation_price?: number;
+  account_creation_description?: string;
   created_at: string;
   updated_at: string;
 }
@@ -181,7 +185,11 @@ export default function HotspotManagementPage() {
     show_welcome_message: true,
     show_description: true,
     show_guest_access: true,
-    show_pin_display: false
+    show_pin_display: false,
+    // NEW: Account creation pricing fields
+    account_creation_pricing_enabled: false,
+    account_creation_price: 0,
+    account_creation_description: ''
   });
 
   const [editLocation, setEditLocation] = useState({
@@ -209,7 +217,11 @@ export default function HotspotManagementPage() {
     show_welcome_message: true,
     show_description: true,
     show_guest_access: true,
-    show_pin_display: false
+    show_pin_display: false,
+    // NEW: Account creation pricing fields
+    account_creation_pricing_enabled: false,
+    account_creation_price: 0,
+    account_creation_description: ''
   });
   
   const [routerConfig, setRouterConfig] = useState({
@@ -500,7 +512,35 @@ export default function HotspotManagementPage() {
 
       if (data.success) {
         await fetchLocations();
-        setNewLocation({ id: '', name: '', display_name: '', description: '', address: '', city: '', state: '', group_id: 1, default_owner_id: '', registration_enabled: true, welcome_message: '', brand_color_primary: 'from-blue-600 to-purple-600', brand_color_secondary: 'from-blue-50 to-purple-50', contact_phone: '', contact_email: '', features: ['High-Speed Internet', '24/7 Support', 'Secure Connection'], show_logo: true, show_location_badge: true, show_display_name: true, show_welcome_message: true, show_description: true, show_guest_access: true, show_pin_display: false });
+        setNewLocation({ 
+          id: '', 
+          name: '', 
+          display_name: '', 
+          description: '', 
+          address: '', 
+          city: '', 
+          state: '', 
+          group_id: 1, 
+          default_owner_id: '', 
+          registration_enabled: true, 
+          welcome_message: '', 
+          brand_color_primary: 'from-blue-600 to-purple-600', 
+          brand_color_secondary: 'from-blue-50 to-purple-50', 
+          contact_phone: '', 
+          contact_email: '', 
+          features: ['High-Speed Internet', '24/7 Support', 'Secure Connection'], 
+          show_logo: true, 
+          show_location_badge: true, 
+          show_display_name: true, 
+          show_welcome_message: true, 
+          show_description: true, 
+          show_guest_access: true, 
+          show_pin_display: false,
+          // NEW: Account creation pricing fields
+          account_creation_pricing_enabled: false,
+          account_creation_price: 0,
+          account_creation_description: ''
+        });
         setShowAddLocation(false);
       } else {
         setError(data.error || 'Failed to create location');
@@ -536,7 +576,11 @@ export default function HotspotManagementPage() {
         show_welcome_message: location.show_welcome_message ?? true,
         show_description: location.show_description ?? true,
         show_guest_access: location.show_guest_access ?? true,
-        show_pin_display: location.show_pin_display ?? false
+        show_pin_display: location.show_pin_display ?? false,
+        // NEW: Account creation pricing fields
+        account_creation_pricing_enabled: location.account_creation_pricing_enabled ?? false,
+        account_creation_price: location.account_creation_price ?? 0,
+        account_creation_description: location.account_creation_description ?? ''
       });
       setShowEditLocation(locationId);
     }
@@ -574,7 +618,11 @@ export default function HotspotManagementPage() {
           show_welcome_message: editLocation.show_welcome_message,
           show_description: editLocation.show_description,
           show_guest_access: editLocation.show_guest_access,
-          show_pin_display: editLocation.show_pin_display
+          show_pin_display: editLocation.show_pin_display,
+          // NEW: Account creation pricing fields
+          account_creation_pricing_enabled: editLocation.account_creation_pricing_enabled,
+          account_creation_price: editLocation.account_creation_price,
+          account_creation_description: editLocation.account_creation_description
         }),
       });
 
@@ -606,7 +654,11 @@ export default function HotspotManagementPage() {
           show_welcome_message: true,
           show_description: true,
           show_guest_access: true,
-          show_pin_display: false
+          show_pin_display: false,
+          // NEW: Account creation pricing fields
+          account_creation_pricing_enabled: false,
+          account_creation_price: 0,
+          account_creation_description: ''
         });
       } else {
         setError(data.error || 'Failed to update location');
@@ -1888,6 +1940,66 @@ export default function HotspotManagementPage() {
                           </label>
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Account Creation Pricing Section */}
+                  <div className="border border-gray-700 rounded-lg p-4 bg-gray-800/50">
+                    <div className="flex items-center gap-2 mb-4">
+                      <CreditCard className="h-5 w-5 text-blue-400" />
+                      <h3 className="text-lg font-medium text-gray-200">Account Creation Pricing</h3>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      {/* Enable Pricing Toggle */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="editAccountCreationPricingEnabled" className="text-gray-300">Enable Account Creation Pricing</Label>
+                          <p className="text-xs text-gray-500">Charge users a fee to create new accounts at this location</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            id="editAccountCreationPricingEnabled"
+                            type="checkbox"
+                            checked={editLocation.account_creation_pricing_enabled}
+                            onChange={(e) => setEditLocation({...editLocation, account_creation_pricing_enabled: e.target.checked})}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                      </div>
+
+                      {/* Price Input - Only show when pricing is enabled */}
+                      {editLocation.account_creation_pricing_enabled && (
+                        <>
+                          <div>
+                            <Label htmlFor="editAccountCreationPrice" className="text-gray-300">Account Creation Price (₦)</Label>
+                            <Input
+                              id="editAccountCreationPrice"
+                              type="number"
+                              min="0"
+                              step="100"
+                              value={editLocation.account_creation_price}
+                              onChange={(e) => setEditLocation({...editLocation, account_creation_price: parseFloat(e.target.value) || 0})}
+                              placeholder="e.g., 5000"
+                              className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Amount in Nigerian Naira to charge for creating a new account</p>
+                          </div>
+
+                          <div>
+                            <Label htmlFor="editAccountCreationDescription" className="text-gray-300">Pricing Description</Label>
+                            <Input
+                              id="editAccountCreationDescription"
+                              value={editLocation.account_creation_description}
+                              onChange={(e) => setEditLocation({...editLocation, account_creation_description: e.target.value})}
+                              placeholder="e.g., One-time account setup fee includes WiFi access configuration"
+                              className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Description shown to users about the account creation fee</p>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                   

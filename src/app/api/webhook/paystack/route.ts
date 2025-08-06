@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { createRenewalTransaction, getCustomerByUsername, createOrUpdateCustomer, getAccountOwnerByUsername } from '@/lib/database';
+import { createRenewalTransaction, getCustomerByUsername, createOrUpdateCustomer, getAccountOwnerByUsername, getLocationWithOwner } from '@/lib/database';
 import { supabaseAdmin } from '@/lib/supabase';
 
 // RADIUS API Configuration
@@ -172,7 +172,7 @@ async function addCreditsToUser(
   }
 }
 
-// Extract metadata from Paystack payment
+// Extract metadata from Paystack payment with enhanced combined payment detection
 function extractPaymentMetadata(event: PaystackWebhookEvent) {
   const metadata = event.data.metadata;
   let username = '';
@@ -180,6 +180,14 @@ function extractPaymentMetadata(event: PaystackWebhookEvent) {
   let timeunitexp = 30; // default
   let trafficunitcomb = 0;
   let limitcomb = 0;
+  let purpose = ''; // To detect account creation payments
+  let locationId = ''; // Location context for account creation
+  
+  // NEW: Enhanced fields for combined payment detection
+  let accountCreationFee = 0;
+  let servicePlanPrice = 0;
+  let servicePlanName = '';
+  let isCombinedPayment = false;
 
   // Extract from custom_fields if available
   if (metadata.custom_fields && Array.isArray(metadata.custom_fields)) {
@@ -200,6 +208,22 @@ function extractPaymentMetadata(event: PaystackWebhookEvent) {
         case 'limitcomb':
           limitcomb = parseInt(field.value) || 0;
           break;
+        case 'purpose':
+          purpose = field.value;
+          break;
+        case 'location_id':
+          locationId = field.value;
+          break;
+        // NEW: Combined payment specific fields
+        case 'account_creation_fee':
+          accountCreationFee = parseFloat(field.value) || 0;
+          break;
+        case 'service_plan_price':
+          servicePlanPrice = parseFloat(field.value) || 0;
+          break;
+        case 'service_plan_name':
+          servicePlanName = field.value;
+          break;
       }
     }
   }
@@ -210,14 +234,286 @@ function extractPaymentMetadata(event: PaystackWebhookEvent) {
   timeunitexp = timeunitexp || (typeof metadata.timeunitexp === 'number' ? metadata.timeunitexp : 30);
   trafficunitcomb = trafficunitcomb || (typeof metadata.trafficunitcomb === 'number' ? metadata.trafficunitcomb : 0);
   limitcomb = limitcomb || (typeof metadata.limitcomb === 'number' ? metadata.limitcomb : 0);
+  purpose = purpose || (typeof metadata.purpose === 'string' ? metadata.purpose : '');
+  locationId = locationId || (typeof metadata.location_id === 'string' ? metadata.location_id : '');
+
+  // Detect combined payment
+  isCombinedPayment = purpose === 'Combined Account Creation & Service Plan' && 
+                     accountCreationFee > 0 && 
+                     servicePlanPrice > 0 && 
+                     !!srvid && 
+                     !!servicePlanName;
 
   return {
     username,
     srvid,
     timeunitexp,
     trafficunitcomb,
-    limitcomb
+    limitcomb,
+    purpose,
+    locationId,
+    // NEW: Combined payment detection results
+    isCombinedPayment,
+    accountCreationFee,
+    servicePlanPrice,
+    servicePlanName,
+    paymentBreakdown: isCombinedPayment ? {
+      accountCreation: {
+        amount: accountCreationFee,
+        type: 'account_creation'
+      },
+      servicePlan: {
+        amount: servicePlanPrice,
+        type: 'renewal',
+        planId: srvid,
+        planName: servicePlanName,
+        duration: timeunitexp
+      }
+    } : null
   };
+}
+
+// NEW: Handle account creation payments
+async function handleAccountCreationPayment(event: PaystackWebhookEvent, locationId: string) {
+  try {
+    const { reference } = event.data;
+    const paymentAmount = event.data.amount / 100; // Convert from kobo to naira
+
+    // Get customer information from metadata
+    const metadata = event.data.metadata;
+    let customerPhone = '';
+    
+    if (metadata.custom_fields && Array.isArray(metadata.custom_fields)) {
+      for (const field of metadata.custom_fields) {
+        if (field.variable_name === 'phone') {
+          customerPhone = field.value;
+        }
+      }
+    }
+
+    // Get location data for commission calculation
+    let locationData = null;
+    if (locationId) {
+      try {
+        locationData = await getLocationWithOwner(locationId);
+      } catch (error) {
+        console.error('Error fetching location data for account creation:', error);
+      }
+    }
+
+    // Create transaction record for account creation
+    try {
+      const commissionRate = locationData?.owner?.commission_rate || 10.00;
+      const transactionData = {
+        username: customerPhone || 'Unknown', // Use phone as username
+        service_plan_id: 0, // Account creation doesn't have service plan
+        service_plan_name: 'Account Creation',
+        amount_paid: paymentAmount,
+        commission_rate: commissionRate,
+        commission_amount: (paymentAmount * commissionRate) / 100,
+        paystack_reference: reference,
+        payment_status: 'success' as const,
+        renewal_period_days: 0, // Account creation doesn't add days
+        renewal_start_date: new Date().toISOString(),
+        renewal_end_date: new Date().toISOString(),
+        customer_location: locationData?.city || '',
+        transaction_type: 'account_creation' as const,
+        account_owner_id: locationData?.default_owner_id
+      };
+
+      await createRenewalTransaction(transactionData);
+      console.log('Account creation transaction recorded:', reference);
+
+      return NextResponse.json({
+        success: true,
+        message: 'Account creation payment processed successfully',
+        reference: reference
+      });
+
+    } catch (transactionError) {
+      console.error('Error recording account creation transaction:', transactionError);
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to record transaction'
+      }, { status: 500 });
+    }
+
+  } catch (error) {
+    console.error('Error processing account creation payment:', error);
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to process account creation payment'
+    }, { status: 500 });
+  }
+}
+
+// NEW: Handle combined account creation and service plan payments
+async function handleCombinedPayment(event: PaystackWebhookEvent, paymentDetails: {
+  accountCreationFee: number;
+  servicePlanPrice: number;
+  servicePlanName: string;
+  locationId: string;
+  username: string;
+  srvid: string;
+  timeunitexp: number;
+  trafficunitcomb: number;
+  limitcomb: number;
+}) {
+  try {
+    const { reference } = event.data;
+    const paymentAmount = event.data.amount / 100; // Convert from kobo to naira
+
+    // Get customer information from metadata
+    const metadata = event.data.metadata;
+    let customerPhone = '';
+    
+    if (metadata.custom_fields && Array.isArray(metadata.custom_fields)) {
+      for (const field of metadata.custom_fields) {
+        if (field.variable_name === 'phone') {
+          customerPhone = field.value;
+        }
+      }
+    }
+
+    // Get location data for commission calculation
+    let locationData = null;
+    if (paymentDetails.locationId) {
+      try {
+        locationData = await getLocationWithOwner(paymentDetails.locationId);
+      } catch (error) {
+        console.error('Error fetching location data for combined payment:', error);
+      }
+    }
+
+    // Create dual transaction records for combined payment (Task 2.2.3)
+    try {
+      const commissionRate = locationData?.owner?.commission_rate || 10.00;
+      
+      // Transaction 1: Account creation transaction (Task 2.2.1)
+      const accountCreationTransactionData = {
+        username: customerPhone || paymentDetails.username,
+        service_plan_id: 0, // Account creation specific
+        service_plan_name: 'Account Creation',
+        amount_paid: paymentDetails.accountCreationFee,
+        commission_rate: commissionRate,
+        commission_amount: (paymentDetails.accountCreationFee * commissionRate) / 100,
+        paystack_reference: reference,
+        payment_status: 'success' as const,
+        renewal_period_days: 0, // Account creation doesn't add days
+        renewal_start_date: new Date().toISOString(),
+        renewal_end_date: new Date().toISOString(),
+        customer_location: locationData?.city || '',
+        transaction_type: 'account_creation' as const,
+        account_owner_id: locationData?.default_owner_id
+      };
+
+      // Transaction 2: Service plan transaction (Task 2.2.2)
+      const servicePlanTransactionData = {
+        username: customerPhone || paymentDetails.username,
+        service_plan_id: parseInt(paymentDetails.srvid) || 0,
+        service_plan_name: paymentDetails.servicePlanName,
+        amount_paid: paymentDetails.servicePlanPrice,
+        commission_rate: commissionRate,
+        commission_amount: (paymentDetails.servicePlanPrice * commissionRate) / 100,
+        paystack_reference: reference,
+        payment_status: 'success' as const,
+        renewal_period_days: paymentDetails.timeunitexp,
+        renewal_start_date: new Date().toISOString(),
+        renewal_end_date: new Date(Date.now() + paymentDetails.timeunitexp * 24 * 60 * 60 * 1000).toISOString(),
+        customer_location: locationData?.city || '',
+        transaction_type: 'renewal' as const, // Service plan is treated as renewal
+        account_owner_id: locationData?.default_owner_id
+      };
+
+      // Record both transactions with same reference for linking (Task 2.2.3)
+      const [accountCreationResult, servicePlanResult] = await Promise.all([
+        createRenewalTransaction(accountCreationTransactionData),
+        createRenewalTransaction(servicePlanTransactionData)
+      ]);
+
+      console.log('Combined payment dual transactions recorded:', {
+        reference,
+        accountCreationTransactionId: accountCreationResult.id,
+        servicePlanTransactionId: servicePlanResult.id,
+        totalAmount: paymentAmount,
+        accountCreationFee: paymentDetails.accountCreationFee,
+        servicePlanPrice: paymentDetails.servicePlanPrice
+      });
+
+      // Apply service credits to the account (Task 2.3)
+      const trafficToAdd = paymentDetails.limitcomb === 0 ? 0 : paymentDetails.trafficunitcomb * 1048576; // Convert MB to bytes
+      const creditsResult = await addCreditsToUser(
+        paymentDetails.username, 
+        paymentDetails.timeunitexp, 
+        trafficToAdd
+      );
+
+      if (creditsResult.success) {
+        console.log('Service credits applied successfully for combined payment:', {
+          username: paymentDetails.username,
+          daysAdded: paymentDetails.timeunitexp,
+          trafficAdded: trafficToAdd,
+          newExpiry: creditsResult.newExpiry,
+          // Task 2.3.2: Proper expiry calculation completed by addCreditsToUser
+          // Task 2.3.3: Traffic limits and bandwidth handled via trafficToAdd parameter
+          // Task 2.3.4: Account status updated via RADIUS API call in addCreditsToUser
+        });
+
+        // Update service plan transaction with actual expiry from RADIUS
+        if (creditsResult.newExpiry && servicePlanResult) {
+          try {
+            const { error: updateError } = await supabaseAdmin
+              .from('renewal_transactions')
+              .update({ 
+                renewal_end_date: creditsResult.newExpiry 
+              })
+              .eq('id', servicePlanResult.id);
+
+            if (updateError) {
+              console.error('Error updating service plan transaction expiry:', updateError);
+            } else {
+              console.log('Service plan transaction updated with actual expiry:', creditsResult.newExpiry);
+            }
+          } catch (updateError) {
+            console.error('Exception updating service plan transaction expiry:', updateError);
+          }
+        }
+      } else {
+        console.error('Failed to apply service credits for combined payment:', {
+          username: paymentDetails.username,
+          error: 'RADIUS credit application failed'
+        });
+        
+        // Even if credit application fails, we still return success for payment processing
+        // The transactions are recorded, but manual intervention may be needed for credits
+        console.warn('Combined payment processed but manual credit application may be required');
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Combined payment processed successfully',
+        reference: reference,
+        transactions: {
+          accountCreation: accountCreationResult.id,
+          servicePlan: servicePlanResult.id
+        }
+      });
+
+    } catch (transactionError) {
+      console.error('Error recording combined payment transactions:', transactionError);
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to record transactions'
+      }, { status: 500 });
+    }
+
+  } catch (error) {
+    console.error('Error processing combined payment:', error);
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to process combined payment'
+    }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -253,10 +549,41 @@ export async function POST(request: NextRequest) {
       }
 
       // Extract payment metadata
-      const { username, srvid, timeunitexp, trafficunitcomb, limitcomb } = extractPaymentMetadata(event);
+      const { username, srvid, timeunitexp, trafficunitcomb, limitcomb, purpose, locationId, isCombinedPayment, accountCreationFee, servicePlanPrice, servicePlanName } = extractPaymentMetadata(event);
 
+      // Enhanced logging for payment type classification
+      console.log('Payment metadata extracted:', {
+        reference,
+        purpose,
+        isCombinedPayment,
+        accountCreationFee: isCombinedPayment ? accountCreationFee : 'N/A',
+        servicePlanPrice: isCombinedPayment ? servicePlanPrice : 'N/A',
+        servicePlanName: isCombinedPayment ? servicePlanName : 'N/A',
+        paymentType: isCombinedPayment ? 'COMBINED' : (purpose === 'Account Creation' ? 'ACCOUNT_CREATION_ONLY' : 'RENEWAL_ONLY')
+      });
+
+      // Route to appropriate handler based on payment type
+      if (isCombinedPayment) {
+        console.log('Processing combined payment (account creation + service plan):', reference);
+        return await handleCombinedPayment(event, {
+          accountCreationFee,
+          servicePlanPrice,
+          servicePlanName,
+          locationId,
+          username,
+          srvid,
+          timeunitexp,
+          trafficunitcomb,
+          limitcomb
+        });
+      } else if (purpose === 'Account Creation') {
+        console.log('Processing account creation only payment:', reference);
+        return await handleAccountCreationPayment(event, locationId);
+      }
+
+      // Original renewal payment processing
       if (!username || !srvid) {
-        console.error('Missing required metadata:', { username, srvid });
+        console.error('Missing required metadata for renewal payment:', { username, srvid });
         return NextResponse.json({ error: 'Missing metadata' }, { status: 400 });
       }
 
