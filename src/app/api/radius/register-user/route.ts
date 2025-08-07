@@ -127,69 +127,129 @@ export async function POST(request: NextRequest) {
 
         // Check if account creation pricing is enabled
         if (pricingConfig.enabled) {
-          // If pricing is enabled, payment reference is required
-          if (!paymentReference) {
-            return NextResponse.json(
-              { 
-                error: 'Payment required for account creation at this location',
-                requiresPayment: true,
-                pricingConfig: {
-                  price: pricingConfig.price,
-                  description: pricingConfig.description
+          // NEW: Get the selected service plan to check if it's free
+          let selectedServicePlan = null;
+          if (srvid) {
+            try {
+              // Use the correct RADIUS API format instead of the wrong endpoint
+              const radiusBaseUrl = process.env.RADIUS_API_URL?.replace('/api/sysapi.php', '') || '';
+              const servicePlanUrl = `${radiusBaseUrl}/api/sysapi.php?apiuser=${process.env.RADIUS_API_USER}&apipass=${process.env.RADIUS_API_PASS}&q=get_srv&srvid=${srvid}`;
+              
+              console.log('Fetching service plan for payment validation:', servicePlanUrl.replace(process.env.RADIUS_API_PASS || '', '***'));
+              
+              const servicePlanResponse = await fetch(servicePlanUrl);
+              
+              if (servicePlanResponse.ok) {
+                const servicePlanData = await servicePlanResponse.json();
+                console.log('Service plan response for payment validation:', servicePlanData);
+                
+                // Parse RADIUS response format: [0, [{plan_data}]]
+                if (Array.isArray(servicePlanData) && servicePlanData.length >= 2) {
+                  const resultCode = servicePlanData[0];
+                  const serviceDataArray = servicePlanData[1];
+                  
+                  if (resultCode === 0 && Array.isArray(serviceDataArray) && serviceDataArray.length > 0) {
+                    selectedServicePlan = serviceDataArray[0];
+                    console.log('Parsed service plan for validation:', {
+                      srvid: selectedServicePlan.srvid,
+                      srvname: selectedServicePlan.srvname,
+                      unitprice: selectedServicePlan.unitprice,
+                      unitpriceadd: selectedServicePlan.unitpriceadd,
+                      unitpricetax: selectedServicePlan.unitpricetax,
+                      unitpriceaddtax: selectedServicePlan.unitpriceaddtax
+                    });
+                  }
                 }
-              },
-              { status: 402 } // Payment Required
-            );
+              }
+            } catch (error) {
+              console.warn('Could not fetch service plan details for payment validation:', error);
+            }
           }
-
-          // Verify payment was successful and get service plan details if combined
-          try {
-            const paymentVerification = await verifyAccountCreationPayment(paymentReference);
-            if (!paymentVerification.success) {
+          
+          // Calculate the total service plan price
+          const servicePlanPrice = selectedServicePlan ? 
+            parseFloat(selectedServicePlan.unitprice || '0') + 
+            parseFloat(selectedServicePlan.unitpriceadd || '0') + 
+            parseFloat(selectedServicePlan.unitpricetax || '0') + 
+            parseFloat(selectedServicePlan.unitpriceaddtax || '0') : 0;
+          
+          console.log('Service plan price calculation:', {
+            selectedServicePlan: !!selectedServicePlan,
+            unitprice: selectedServicePlan?.unitprice,
+            unitpriceadd: selectedServicePlan?.unitpriceadd,
+            unitpricetax: selectedServicePlan?.unitpricetax,
+            unitpriceaddtax: selectedServicePlan?.unitpriceaddtax,
+            totalPrice: servicePlanPrice
+          });
+          
+          // Only require payment if the service plan has a cost (not free)
+          const requiresPayment = servicePlanPrice > 0;
+          
+          console.log('Payment requirement decision:', {
+            servicePlanPrice,
+            requiresPayment,
+            pricingEnabled: pricingConfig.enabled
+          });
+          
+          if (requiresPayment) {
+            if (!paymentReference) {
               return NextResponse.json(
-                { 
-                  error: 'Payment verification failed. Please complete payment before creating account.',
+                {
+                  error: 'Payment required for account creation with paid service plan',
                   requiresPayment: true,
-                  paymentError: paymentVerification.error
+                  pricingConfig: {
+                    price: pricingConfig.price,
+                    description: pricingConfig.description,
+                    servicePlanPrice: servicePlanPrice,
+                    totalAmount: pricingConfig.price + servicePlanPrice
+                  }
                 },
-                { status: 402 }
+                { status: 402 } // Payment Required
               );
             }
-
-            console.log('Account creation payment verified:', paymentReference);
-
-            // Store service plan details from payment for later use
-            if (paymentVerification.servicePlanDetails) {
-              paymentServicePlanDetails = paymentVerification.servicePlanDetails;
-              console.log('Combined payment detected - service plan from payment:', paymentServicePlanDetails);
-              
-              // Validate service plan from payment matches the requested srvid (security check)
-              if (srvid && paymentServicePlanDetails.srvid.toString() !== srvid) {
-                console.warn(`Service plan mismatch: paid for ${paymentServicePlanDetails.srvid} but requesting ${srvid}`);
+            
+            try {
+              const paymentVerification = await verifyAccountCreationPayment(paymentReference);
+              if (!paymentVerification.success) {
                 return NextResponse.json(
-                  { 
-                    error: 'Service plan mismatch. The service plan you paid for does not match the requested plan.',
+                  {
+                    error: 'Payment verification failed. Please complete payment before creating account.',
                     requiresPayment: true,
-                    paidServicePlan: {
-                      id: paymentServicePlanDetails.srvid,
-                      name: paymentServicePlanDetails.srvname
-                    }
+                    paymentError: paymentVerification.error
                   },
-                  { status: 400 }
+                  { status: 402 }
                 );
               }
+              if (paymentVerification.servicePlanDetails) {
+                paymentServicePlanDetails = paymentVerification.servicePlanDetails;
+                if (srvid && paymentServicePlanDetails.srvid.toString() !== srvid) {
+                  return NextResponse.json(
+                    {
+                      error: 'Service plan mismatch. The service plan you paid for does not match the requested plan.',
+                      requiresPayment: true,
+                      paidServicePlan: {
+                        id: paymentServicePlanDetails.srvid,
+                        name: paymentServicePlanDetails.srvname
+                      }
+                    },
+                    { status: 400 }
+                  );
+                }
+              }
+            } catch (paymentError) {
+              console.error('Error verifying account creation payment:', paymentError);
+              return NextResponse.json(
+                {
+                  error: 'Unable to verify payment. Please try again.',
+                  requiresPayment: true,
+                  details: paymentError instanceof Error ? paymentError.message : 'Unknown payment verification error'
+                },
+                { status: 500 }
+              );
             }
-
-          } catch (paymentError) {
-            console.error('Error verifying account creation payment:', paymentError);
-            return NextResponse.json(
-              { 
-                error: 'Unable to verify payment. Please try again.',
-                requiresPayment: true,
-                details: paymentError instanceof Error ? paymentError.message : 'Unknown payment verification error'
-              },
-              { status: 500 }
-            );
+          } else {
+            // Free service plan - no payment required, log this for transparency
+            console.log(`Account creation for free service plan (${srvid}) - no payment required`);
           }
         }
 

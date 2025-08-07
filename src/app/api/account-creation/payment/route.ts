@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { 
   getAccountCreationPricingConfig, 
   createRenewalTransaction,
-  getLocationWithOwner,
-  AccountCreationPricingConfig
+  getLocationWithOwner
 } from '@/lib/database';
 
 /**
@@ -44,14 +43,6 @@ interface PaystackVerificationResponse {
     metadata: Record<string, unknown>;
   };
   error?: string;
-}
-
-interface LocationData {
-  id: string;
-  display_name: string;
-  city?: string;
-  default_owner_id?: string;
-  default_owner_commission_rate?: number;
 }
 
 interface UserInfo {
@@ -236,20 +227,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch service plan details if servicePlanId is provided (combined billing)
-    let servicePlanDetails: ServicePlanDetails | null = null;
-    if (servicePlanId) {
-      servicePlanDetails = await fetchServicePlanDetails(servicePlanId);
-      if (!servicePlanDetails) {
+    if (action === 'initiate') {
+      // Validate required fields for payment initiation
+      if (!locationId || !userInfo || !userInfo.firstName || !userInfo.lastName || !userInfo.email || !userInfo.phone) {
         return NextResponse.json(
-          { error: 'Invalid or disabled service plan' },
+          { 
+            error: 'Missing required fields: locationId, firstName, lastName, email, phone',
+            success: false 
+          },
           { status: 400 }
         );
       }
-    }
 
-    if (action === 'initiate') {
-      return await initiatePayment(pricingConfig, userInfo, locationData, servicePlanDetails);
+      // NEW: Validate service plan and check if it's free
+      let servicePlanDetails: ServicePlanDetails | null = null;
+      let servicePlanPrice = 0;
+      
+      if (servicePlanId) {
+        servicePlanDetails = await fetchServicePlanDetails(servicePlanId);
+        if (!servicePlanDetails) {
+          return NextResponse.json(
+            { 
+              error: 'Invalid service plan selected',
+              success: false 
+            },
+            { status: 400 }
+          );
+        }
+        
+        servicePlanPrice = servicePlanDetails.totalPrice;
+        
+        // Prevent payment initiation for free service plans
+        if (servicePlanPrice === 0) {
+          return NextResponse.json(
+            { 
+              error: 'Payment not required for free service plans. Please proceed with direct account creation.',
+              success: false,
+              code: 'FREE_PLAN_NO_PAYMENT',
+              servicePlan: {
+                id: servicePlanDetails.srvid,
+                name: servicePlanDetails.srvname,
+                price: servicePlanPrice
+              }
+            },
+            { status: 400 }
+          );
+        }
+      }
+
+      return await initiatePayment(locationId, userInfo, servicePlanDetails);
     } else if (action === 'verify') {
       if (!paymentReference) {
         return NextResponse.json(
@@ -257,10 +283,10 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      return await verifyPayment(paymentReference, pricingConfig, userInfo, locationData, servicePlanDetails);
+      return await verifyPayment(paymentReference, locationId, userInfo);
     } else {
       return NextResponse.json(
-        { error: 'Invalid action. Must be "initiate" or "verify"' },
+        { error: 'Invalid action. Use "initiate" or "verify"' },
         { status: 400 }
       );
     }
@@ -278,12 +304,20 @@ export async function POST(request: NextRequest) {
  * Initiate payment with Paystack
  */
 async function initiatePayment(
-  pricingConfig: AccountCreationPricingConfig,
+  locationId: string,
   userInfo: UserInfo,
-  locationData: LocationData,
   servicePlanDetails: ServicePlanDetails | null
 ) {
   try {
+    // Get pricing configuration for the location
+    const pricingConfig = await getAccountCreationPricingConfig(locationId);
+    if (!pricingConfig) {
+      return NextResponse.json(
+        { error: 'Pricing configuration not found for this location' },
+        { status: 500 }
+      );
+    }
+
     // Calculate combined amount: account creation fee + service plan price
     const accountCreationFee = pricingConfig.price;
     const servicePlanPrice = servicePlanDetails?.totalPrice || 0;
@@ -302,7 +336,7 @@ async function initiatePayment(
       {
         display_name: "Location",
         variable_name: "location",
-        value: locationData.display_name
+        value: locationId // Use locationId directly
       },
       {
         display_name: "Customer Name",
@@ -317,7 +351,7 @@ async function initiatePayment(
       {
         display_name: "Location ID",
         variable_name: "location_id",
-        value: pricingConfig.locationId
+        value: locationId
       },
       {
         display_name: "Account Creation Fee",
@@ -362,7 +396,7 @@ async function initiatePayment(
       );
     }
 
-    // Prepare Paystack payment initialization
+    // Prepare Paystack payment initialization for POPUP/MODAL (not redirect)
     const paystackData = {
       email: userInfo.email,
       amount: Math.round(totalAmount * 100), // Convert to kobo
@@ -370,7 +404,7 @@ async function initiatePayment(
       metadata: {
         custom_fields: customFields
       },
-      callback_url: `${process.env.NEXT_PUBLIC_BASE_URL}/hotspot/register?payment_reference=${reference}&location=${pricingConfig.locationId}`,
+      // Remove callback_url for popup integration
       channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money', 'bank_transfer']
     };
 
@@ -394,18 +428,17 @@ async function initiatePayment(
       );
     }
 
-    // Prepare response data
+    // Prepare response data for popup integration
     const responseData = {
-      authorization_url: paystackResult.data.authorization_url,
+      authorization_url: paystackResult.data.authorization_url, // Keep for compatibility
       access_code: paystackResult.data.access_code,
       reference: paystackResult.data.reference,
+      amount: totalAmount, // Amount in Naira for popup
       accountCreationFee,
       servicePlanPrice,
       totalAmount,
-      description: servicePlanDetails 
-        ? `${pricingConfig.description} + ${servicePlanDetails.srvname}` 
-        : pricingConfig.description,
-      location: locationData.display_name,
+      description: pricingConfig.description,
+      location: locationId,
       breakdown: {
         accountCreation: {
           amount: accountCreationFee,
@@ -445,21 +478,31 @@ async function initiatePayment(
  */
 async function verifyPayment(
   reference: string,
-  pricingConfig: AccountCreationPricingConfig,
-  userInfo: UserInfo,
-  locationData: LocationData,
-  servicePlanDetails: ServicePlanDetails | null
+  locationId: string,
+  userInfo: UserInfo
 ) {
   try {
+    // Get pricing configuration and location data
+    const [pricingConfig, locationData] = await Promise.all([
+      getAccountCreationPricingConfig(locationId),
+      getLocationWithOwner(locationId)
+    ]);
+    
+    if (!pricingConfig) {
+      return NextResponse.json(
+        { error: 'Pricing configuration not found for this location' },
+        { status: 500 }
+      );
+    }
+
     // Verify payment with Paystack
     const verificationResult = await verifyPaystackPayment(reference);
 
     if (!verificationResult.success || !verificationResult.data) {
       return NextResponse.json(
         { 
-          success: false,
-          error: 'Payment verification failed',
-          details: verificationResult.error
+          error: verificationResult.error || 'Payment verification failed',
+          success: false 
         },
         { status: 400 }
       );
@@ -469,136 +512,84 @@ async function verifyPayment(
 
     // Calculate expected combined amount
     const accountCreationFee = pricingConfig.price;
-    const servicePlanPrice = servicePlanDetails?.totalPrice || 0;
+    const servicePlanPrice = 0; // No service plan for verification
     const expectedTotalAmount = accountCreationFee + servicePlanPrice;
     const expectedAmountKobo = Math.round(expectedTotalAmount * 100); // Convert to kobo
 
-    // Verify amount matches
+    // Verify payment amount matches expected amount
     if (paymentData.amount !== expectedAmountKobo) {
       return NextResponse.json(
         {
-          success: false,
-          error: 'Payment amount mismatch',
-          expected: expectedTotalAmount,
-          received: paymentData.amount / 100
+          error: `Payment amount mismatch. Expected ₦${expectedTotalAmount.toLocaleString()}, but received ₦${(paymentData.amount / 100).toLocaleString()}`,
+          success: false
         },
         { status: 400 }
       );
     }
 
-    // Record the transaction(s)
+    // Record transaction in renewal_transactions table for commission tracking
     try {
-      // For combined payments, we record two separate transactions with the same reference
-      if (servicePlanDetails) {
-        // Record account creation transaction
-        const accountCreationTransactionData = {
-          username: userInfo.phone,
-          service_plan_id: 0, // Account creation specific
-          service_plan_name: 'Account Creation',
-          amount_paid: accountCreationFee,
-          commission_rate: locationData.default_owner_commission_rate || 10.00,
-          commission_amount: (accountCreationFee * (locationData.default_owner_commission_rate || 10.00)) / 100,
-          paystack_reference: reference,
-          payment_status: 'success' as const,
-          renewal_period_days: 0,
-          renewal_start_date: new Date().toISOString(),
-          renewal_end_date: new Date().toISOString(),
-          customer_location: locationData.city || '',
-          transaction_type: 'account_creation' as const,
-          account_owner_id: locationData.default_owner_id
-        };
+      // In this case, it's just the account creation transaction
+      const transactionData = {
+        username: userInfo.phone,
+        service_plan_id: 0,
+        service_plan_name: 'Account Creation',
+        amount_paid: accountCreationFee,
+        commission_rate: locationData?.owner?.commission_rate || 10.00,
+        commission_amount: (accountCreationFee * (locationData?.owner?.commission_rate || 10.00)) / 100,
+        paystack_reference: reference,
+        payment_status: 'success' as const,
+        renewal_period_days: 0,
+        renewal_start_date: new Date().toISOString(),
+        renewal_end_date: new Date().toISOString(),
+        customer_location: locationData?.city || locationId,
+        transaction_type: 'account_creation' as const,
+        account_owner_id: locationData?.owner?.id || locationData?.default_owner_id
+      };
 
-        // Record service plan transaction
-        const servicePlanTransactionData = {
-          username: userInfo.phone,
-          service_plan_id: servicePlanDetails.srvid,
-          service_plan_name: servicePlanDetails.srvname,
-          amount_paid: servicePlanPrice,
-          commission_rate: locationData.default_owner_commission_rate || 10.00,
-          commission_amount: (servicePlanPrice * (locationData.default_owner_commission_rate || 10.00)) / 100,
-          paystack_reference: reference,
-          payment_status: 'success' as const,
-          renewal_period_days: servicePlanDetails.timeunitexp,
-          renewal_start_date: new Date().toISOString(),
-          renewal_end_date: new Date(Date.now() + servicePlanDetails.timeunitexp * 24 * 60 * 60 * 1000).toISOString(),
-          customer_location: locationData.city || '',
-          transaction_type: 'renewal' as const, // Service plan is treated as renewal
-          account_owner_id: locationData.default_owner_id
-        };
-
-        // Record both transactions
-        await Promise.all([
-          createRenewalTransaction(accountCreationTransactionData),
-          createRenewalTransaction(servicePlanTransactionData)
-        ]);
-
-        console.log('Combined payment transactions recorded:', reference);
-      } else {
-        // Single account creation transaction (original behavior)
-        const transactionData = {
-          username: userInfo.phone,
-          service_plan_id: 0,
-          service_plan_name: 'Account Creation',
-          amount_paid: accountCreationFee,
-          commission_rate: locationData.default_owner_commission_rate || 10.00,
-          commission_amount: (accountCreationFee * (locationData.default_owner_commission_rate || 10.00)) / 100,
-          paystack_reference: reference,
-          payment_status: 'success' as const,
-          renewal_period_days: 0,
-          renewal_start_date: new Date().toISOString(),
-          renewal_end_date: new Date().toISOString(),
-          customer_location: locationData.city || '',
-          transaction_type: 'account_creation' as const,
-          account_owner_id: locationData.default_owner_id
-        };
-
-        await createRenewalTransaction(transactionData);
-        console.log('Account creation transaction recorded:', reference);
-      }
+      await createRenewalTransaction(transactionData);
+      console.log('Account creation transaction recorded:', reference);
     } catch (transactionError) {
       console.error('Error recording transaction:', transactionError);
-      // Don't fail the verification if transaction recording fails
-      // The payment is still valid
+      // Don't fail the payment verification due to transaction recording issues
+      // The payment was successful, transaction recording is for tracking purposes
     }
 
-    // Prepare response data
+    // Return success response with payment details
     const responseData = {
-      reference: reference,
-      accountCreationFee,
-      servicePlanPrice,
-      totalAmount: expectedTotalAmount,
+      reference: paymentData.reference,
+      amount: paymentData.amount / 100, // Convert back to Naira
       status: paymentData.status,
       paid_at: paymentData.paid_at,
-      location: locationData.display_name,
+      location: locationData?.display_name || locationId,
       canProceedWithRegistration: true,
       breakdown: {
         accountCreation: {
           amount: accountCreationFee,
           description: pricingConfig.description
         },
-        ...(servicePlanDetails && {
-          servicePlan: {
-            amount: servicePlanPrice,
-            name: servicePlanDetails.srvname,
-            duration: `${servicePlanDetails.timeunitexp} days`,
-            id: servicePlanDetails.srvid
-          }
-        })
+        servicePlan: {
+          amount: servicePlanPrice,
+          name: 'Account Creation',
+          duration: '0 days',
+          id: 0
+        }
       }
     };
 
     return NextResponse.json({
       success: true,
-      message: servicePlanDetails 
-        ? 'Combined payment verified successfully' 
-        : 'Payment verified successfully',
+      message: 'Payment verified successfully',
       data: responseData
     });
 
   } catch (error) {
-    console.error('Error verifying payment:', error);
+    console.error('Payment verification error:', error);
     return NextResponse.json(
-      { error: 'Payment verification failed' },
+      { 
+        error: 'Internal server error during payment verification',
+        success: false 
+      },
       { status: 500 }
     );
   }

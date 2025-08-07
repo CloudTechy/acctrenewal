@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { createRenewalTransaction, getCustomerByUsername, createOrUpdateCustomer, getAccountOwnerByUsername, getLocationWithOwner } from '@/lib/database';
+import { createRenewalTransaction, getCustomerByUsername, createOrUpdateCustomer, getAccountOwnerByUsername, getLocationWithOwner, createHotspotCustomer } from '@/lib/database';
 import { supabaseAdmin } from '@/lib/supabase';
 
 // RADIUS API Configuration
@@ -89,6 +89,14 @@ async function addCreditsToUser(
   currentExpiry?: string
 ): Promise<{ success: boolean; newExpiry?: string }> {
   try {
+    console.log('🔍 [DEBUG] addCreditsToUser called with:', {
+      username,
+      daysToAdd,
+      daysToAdd_type: typeof daysToAdd,
+      trafficToAdd,
+      currentExpiry
+    });
+    
     console.log(`Adding ${daysToAdd} days to user ${username}`);
     if (currentExpiry) {
       console.log(`User current expiry: ${currentExpiry}`);
@@ -172,9 +180,119 @@ async function addCreditsToUser(
   }
 }
 
+// Create user in RADIUS Manager - FIXED: No initial expiry for combined payments
+async function createRadiusUser(userInfo: {
+  username: string;
+  password: string;
+  firstname: string;
+  lastname: string;
+  email: string;
+  phone: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  srvid: string;
+  timeunitexp: number; // Duration info for reference, but not used for initial expiry
+  locationData?: {
+    group_id?: number;
+    owner?: {
+      owner_username: string;
+    };
+  };
+  isFromCombinedPayment?: boolean; // NEW: Flag to indicate combined payment
+}): Promise<{ success: boolean; message?: string }> {
+  try {
+    const radiusBaseUrl = RADIUS_API_CONFIG.baseUrl.replace('/api/sysapi.php', '');
+    
+    // 🔧 FIX: For combined payments, don't set initial expiry
+    // Let addCreditsToUser handle ALL credit application to prevent double crediting
+    let expiryDate: string | undefined;
+    
+    if (userInfo.isFromCombinedPayment) {
+      // For combined payments: Create user with minimal access (1 hour)
+      // This allows immediate login while payment processing completes
+      const minimalExpiry = new Date();
+      minimalExpiry.setHours(minimalExpiry.getHours() + 1); // 1 hour minimal access
+      expiryDate = minimalExpiry.toISOString().slice(0, 19).replace('T', ' ');
+      
+      console.log('🔧 [FIX] Combined payment detected - creating user with minimal expiry:', expiryDate);
+      console.log('🔧 [FIX] Full service credits will be applied by addCreditsToUser to prevent double crediting');
+    } else {
+      // For non-combined payments (account creation only): Use original logic
+      if (userInfo.timeunitexp > 0) {
+        // Calculate future date from today
+        const expiryDateTime = new Date();
+        expiryDateTime.setDate(expiryDateTime.getDate() + userInfo.timeunitexp);
+        expiryDate = expiryDateTime.toISOString().slice(0, 19).replace('T', ' '); // Format: YYYY-MM-DD HH:mm:ss
+      } else {
+        // For unlimited plans, set far future date
+        const expiryDateTime = new Date();
+        expiryDateTime.setFullYear(expiryDateTime.getFullYear() + 10); // 10 years from now
+        expiryDate = expiryDateTime.toISOString().slice(0, 19).replace('T', ' ');
+      }
+    }
+    
+    // Construct the API URL for creating new user
+    const params = new URLSearchParams({
+      apiuser: RADIUS_API_CONFIG.apiuser,
+      apipass: RADIUS_API_CONFIG.apipass,
+      q: 'new_user',
+      username: userInfo.username,
+      password: userInfo.password,
+      enabled: '1',
+      acctype: '0',
+      srvid: userInfo.srvid,
+      firstname: userInfo.firstname,
+      lastname: userInfo.lastname,
+      email: userInfo.email,
+      phone: userInfo.phone,
+      expiry: expiryDate, // Use calculated expiry (minimal for combined payments)
+      ...(userInfo.address && { address: userInfo.address }),
+      ...(userInfo.city && { city: userInfo.city }),
+      ...(userInfo.state && { state: userInfo.state }),
+      ...(userInfo.locationData?.group_id && { groupid: userInfo.locationData.group_id.toString() }),
+      ...(userInfo.locationData?.owner?.owner_username && { owner: userInfo.locationData.owner.owner_username })
+    });
+
+    const apiUrl = `${radiusBaseUrl}/api/sysapi.php?${params.toString()}`;
+    
+    console.log('Creating RADIUS user via webhook:', userInfo.username, 'with expiry:', expiryDate);
+
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'PHSWEB-NextJS-App/1.0',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to create user with Radius Manager');
+    }
+
+    const data = await response.json();
+    console.log('RADIUS user creation response:', data);
+    
+    // Check if the registration was successful
+    if (data[0] === 0) {
+      console.log('RADIUS user created successfully:', userInfo.username);
+      return { success: true, message: data[1] || 'User created successfully' };
+    } else {
+      console.error('RADIUS user creation failed:', data[1]);
+      return { success: false, message: data[1] || 'User creation failed' };
+    }
+
+  } catch (error) {
+    console.error('Error creating RADIUS user:', error);
+    return { success: false, message: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
 // Extract metadata from Paystack payment with enhanced combined payment detection
 function extractPaymentMetadata(event: PaystackWebhookEvent) {
   const metadata = event.data.metadata;
+  console.log('Webhook received metadata:', metadata);
+  
   let username = '';
   let srvid = '';
   let timeunitexp = 30; // default
@@ -182,6 +300,7 @@ function extractPaymentMetadata(event: PaystackWebhookEvent) {
   let limitcomb = 0;
   let purpose = ''; // To detect account creation payments
   let locationId = ''; // Location context for account creation
+  let customerEmail = ''; // NEW: Extract email from metadata
   
   // NEW: Enhanced fields for combined payment detection
   let accountCreationFee = 0;
@@ -191,15 +310,27 @@ function extractPaymentMetadata(event: PaystackWebhookEvent) {
 
   // Extract from custom_fields if available
   if (metadata.custom_fields && Array.isArray(metadata.custom_fields)) {
+    console.log('Extracting from custom_fields:', metadata.custom_fields);
     for (const field of metadata.custom_fields) {
+      console.log(`Processing field: ${field.variable_name} = ${field.value}`);
       switch (field.variable_name) {
         case 'username':
+        case 'phone': // Phone is the username in our system
           username = field.value;
+          break;
+        case 'email':
+          customerEmail = field.value;
           break;
         case 'srvid':
           srvid = field.value;
           break;
         case 'timeunitexp':
+          console.log('🔍 [DEBUG] Webhook - processing timeunitexp field:', {
+            field_value: field.value,
+            field_value_type: typeof field.value,
+            parseInt_result: parseInt(field.value),
+            parseInt_or_30: parseInt(field.value) || 30
+          });
           timeunitexp = parseInt(field.value) || 30;
           break;
         case 'trafficunitcomb':
@@ -230,6 +361,7 @@ function extractPaymentMetadata(event: PaystackWebhookEvent) {
 
   // Also check direct metadata properties
   username = username || (typeof metadata.username === 'string' ? metadata.username : '');
+  customerEmail = customerEmail || (typeof metadata.email === 'string' ? metadata.email : '');
   srvid = srvid || (typeof metadata.srvid === 'string' ? metadata.srvid : '');
   timeunitexp = timeunitexp || (typeof metadata.timeunitexp === 'number' ? metadata.timeunitexp : 30);
   trafficunitcomb = trafficunitcomb || (typeof metadata.trafficunitcomb === 'number' ? metadata.trafficunitcomb : 0);
@@ -244,8 +376,24 @@ function extractPaymentMetadata(event: PaystackWebhookEvent) {
                      !!srvid && 
                      !!servicePlanName;
 
+  console.log('Metadata extraction results:', {
+    username,
+    customerEmail,
+    srvid,
+    purpose,
+    locationId,
+    accountCreationFee,
+    servicePlanPrice,
+    servicePlanName,
+    isCombinedPayment,
+    timeunitexp,
+    trafficunitcomb,
+    limitcomb
+  });
+
   return {
     username,
+    customerEmail,
     srvid,
     timeunitexp,
     trafficunitcomb,
@@ -347,13 +495,27 @@ async function handleAccountCreationPayment(event: PaystackWebhookEvent, locatio
   }
 }
 
-// NEW: Handle combined account creation and service plan payments
+// NEW: Handle combined account creation and service plan payments (SIMPLIFIED)
+// 🔧 [DOUBLE CREDIT FIX] This function has been updated to prevent double crediting:
+// 
+// BEFORE FIX:
+// 1. createRadiusUser() set initial expiry: TODAY + timeunitexp (e.g., +30 days)
+// 2. addCreditsToUser() added more time: EXISTING_EXPIRY + timeunitexp (e.g., +30 more days) 
+// 3. RESULT: 60 days instead of 30 days (double crediting)
+//
+// AFTER FIX:
+// 1. createRadiusUser() sets minimal expiry: TODAY + 1 hour (for combined payments only)
+// 2. addCreditsToUser() adds full service time: MINIMAL_EXPIRY + timeunitexp (e.g., +30 days)
+// 3. RESULT: 30 days as expected (correct crediting)
+//
+// This fix ONLY affects combined payments. Regular renewals are unchanged and continue to work correctly.
 async function handleCombinedPayment(event: PaystackWebhookEvent, paymentDetails: {
   accountCreationFee: number;
   servicePlanPrice: number;
   servicePlanName: string;
   locationId: string;
   username: string;
+  customerEmail: string;
   srvid: string;
   timeunitexp: number;
   trafficunitcomb: number;
@@ -385,67 +547,185 @@ async function handleCombinedPayment(event: PaystackWebhookEvent, paymentDetails
       }
     }
 
-    // Create dual transaction records for combined payment (Task 2.2.3)
+    // SIMPLIFIED: Create single transaction for the total combined amount
     try {
       const commissionRate = locationData?.owner?.commission_rate || 10.00;
       
-      // Transaction 1: Account creation transaction (Task 2.2.1)
-      const accountCreationTransactionData = {
-        username: customerPhone || paymentDetails.username,
-        service_plan_id: 0, // Account creation specific
-        service_plan_name: 'Account Creation',
-        amount_paid: paymentDetails.accountCreationFee,
-        commission_rate: commissionRate,
-        commission_amount: (paymentDetails.accountCreationFee * commissionRate) / 100,
-        paystack_reference: reference,
-        payment_status: 'success' as const,
-        renewal_period_days: 0, // Account creation doesn't add days
-        renewal_start_date: new Date().toISOString(),
-        renewal_end_date: new Date().toISOString(),
-        customer_location: locationData?.city || '',
-        transaction_type: 'account_creation' as const,
-        account_owner_id: locationData?.default_owner_id
-      };
-
-      // Transaction 2: Service plan transaction (Task 2.2.2)
-      const servicePlanTransactionData = {
+      const combinedTransactionData = {
         username: customerPhone || paymentDetails.username,
         service_plan_id: parseInt(paymentDetails.srvid) || 0,
-        service_plan_name: paymentDetails.servicePlanName,
-        amount_paid: paymentDetails.servicePlanPrice,
+        service_plan_name: `${paymentDetails.servicePlanName} + Account Setup`,
+        amount_paid: paymentAmount, // Total combined amount
         commission_rate: commissionRate,
-        commission_amount: (paymentDetails.servicePlanPrice * commissionRate) / 100,
+        commission_amount: (paymentAmount * commissionRate) / 100,
         paystack_reference: reference,
         payment_status: 'success' as const,
         renewal_period_days: paymentDetails.timeunitexp,
         renewal_start_date: new Date().toISOString(),
         renewal_end_date: new Date(Date.now() + paymentDetails.timeunitexp * 24 * 60 * 60 * 1000).toISOString(),
         customer_location: locationData?.city || '',
-        transaction_type: 'renewal' as const, // Service plan is treated as renewal
+        transaction_type: 'renewal' as const, // Treat as renewal since we're applying service plan
         account_owner_id: locationData?.default_owner_id
       };
 
-      // Record both transactions with same reference for linking (Task 2.2.3)
-      const [accountCreationResult, servicePlanResult] = await Promise.all([
-        createRenewalTransaction(accountCreationTransactionData),
-        createRenewalTransaction(servicePlanTransactionData)
-      ]);
+      const transactionResult = await createRenewalTransaction(combinedTransactionData);
 
-      console.log('Combined payment dual transactions recorded:', {
+      console.log('Combined payment transaction recorded:', {
         reference,
-        accountCreationTransactionId: accountCreationResult.id,
-        servicePlanTransactionId: servicePlanResult.id,
+        transactionId: transactionResult?.id,
         totalAmount: paymentAmount,
-        accountCreationFee: paymentDetails.accountCreationFee,
-        servicePlanPrice: paymentDetails.servicePlanPrice
+        servicePlanName: paymentDetails.servicePlanName,
+        accountSetupIncluded: true
       });
 
-      // Apply service credits to the account (Task 2.3)
+      // Apply service credits to the account (This is the main goal)
+      // STEP 1: Check if user already exists in RADIUS
+      console.log('Checking if RADIUS user already exists:', paymentDetails.username);
+      const userExists = await checkRadiusUserExists(paymentDetails.username);
+      
+      // Initialize variables that might be needed later
+      const password = Math.floor(1000 + Math.random() * 9000).toString();
+      let firstname = 'User';
+      let lastname = 'Account';
+      
+      // 🔧 [FIX] Declare currentUserExpiry outside conditional blocks for scope
+      let currentUserExpiry: string | undefined;
+      
+      if (userExists) {
+        console.log('RADIUS user already exists, skipping user creation and proceeding to credit application');
+      } else {
+        // STEP 1A: Create the user in RADIUS first (with metadata from payment)
+        let customerName = '';
+        const customerAddress = '';
+        const customerCity = '';
+        const customerState = '';
+        
+        // Extract customer details from metadata
+        if (metadata.custom_fields && Array.isArray(metadata.custom_fields)) {
+          for (const field of metadata.custom_fields) {
+            if (field.variable_name === 'customer_name') {
+              customerName = field.value;
+            }
+          }
+        }
+        
+        // Parse customer name
+        const nameParts = customerName.split(' ');
+        firstname = nameParts[0] || 'User';
+        lastname = nameParts.slice(1).join(' ') || 'Account';
+        
+        console.log('Creating RADIUS user for combined payment:', {
+          username: paymentDetails.username,
+          firstname,
+          lastname,
+          srvid: paymentDetails.srvid,
+          timeunitexp: paymentDetails.timeunitexp,
+          email: paymentDetails.customerEmail
+        });
+        
+        const userCreationResult = await createRadiusUser({
+          username: paymentDetails.username,
+          password: password,
+          firstname: firstname,
+          lastname: lastname,
+          email: paymentDetails.customerEmail,
+          phone: paymentDetails.username,
+          address: customerAddress,
+          city: customerCity,
+          state: customerState,
+          srvid: paymentDetails.srvid,
+          timeunitexp: paymentDetails.timeunitexp, // Pass the timeunitexp
+          locationData: locationData ? {
+            group_id: locationData.group_id,
+            owner: locationData.owner ? {
+              owner_username: locationData.owner.owner_username
+            } : undefined
+          } : undefined,
+          isFromCombinedPayment: true // Indicate this is a combined payment
+        });
+        
+        if (!userCreationResult.success) {
+          console.error('Failed to create RADIUS user for combined payment:', userCreationResult.message);
+          return NextResponse.json({
+            success: false,
+            error: 'Failed to create user account',
+            details: userCreationResult.message
+          }, { status: 500 });
+        }
+        
+        console.log('RADIUS user created successfully, now adding service credits...');
+        
+        // Record the customer in our local database if location data is available
+        if (locationData) {
+          try {
+            await createHotspotCustomer({
+              username: paymentDetails.username,
+              first_name: firstname,
+              last_name: lastname,
+              email: paymentDetails.customerEmail,
+              phone: paymentDetails.username,
+              address: customerAddress || '',
+              city: customerCity || '',
+              state: customerState || '',
+              wifi_password: password,
+              location_id: paymentDetails.locationId,
+              account_owner_id: locationData.default_owner_id || '',
+              last_service_plan_id: parseInt(paymentDetails.srvid),
+              last_service_plan_name: paymentDetails.servicePlanName
+            });
+
+            console.log('Customer record created successfully for combined payment');
+          } catch (error) {
+            console.error('Failed to create customer record for combined payment:', error);
+            // Continue processing - user exists in RADIUS
+          }
+        }
+      }
+      
+      // 🔧 [FIX] Get current user expiry AFTER user creation (or for existing user) but BEFORE adding credits
+      // This ensures we start from the correct current expiry to prevent double crediting
+      try {
+        const userUrl = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=get_userdata&username=${encodeURIComponent(paymentDetails.username)}`;
+        const userResponse = await fetch(userUrl, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'PHSWEB-NextJS-App/1.0',
+          },
+        });
+
+        if (userResponse.ok) {
+          const userResult = await userResponse.text();
+          const userData = JSON.parse(userResult);
+          
+          // Parse RADIUS response to get current expiry
+          if (typeof userData === 'object' && userData !== null) {
+            const resultCode = userData["0"];
+            if (resultCode === 0 && userData.expiry) {
+              currentUserExpiry = userData.expiry;
+              console.log('🔧 [FIX] Current user expiry before adding credits:', currentUserExpiry);
+            }
+          }
+        }
+      } catch (userError) {
+        console.error('Error fetching user data before adding credits:', userError);
+        // Continue without current expiry - addCreditsToUser will add from today
+      }
+
       const trafficToAdd = paymentDetails.limitcomb === 0 ? 0 : paymentDetails.trafficunitcomb * 1048576; // Convert MB to bytes
+      
+      console.log('🔧 [FIX] About to call addCreditsToUser with current expiry:', {
+        username: paymentDetails.username,
+        timeunitexp_from_paymentDetails: paymentDetails.timeunitexp,
+        timeunitexp_type: typeof paymentDetails.timeunitexp,
+        trafficToAdd,
+        currentUserExpiry: currentUserExpiry
+      });
+      
       const creditsResult = await addCreditsToUser(
         paymentDetails.username, 
         paymentDetails.timeunitexp, 
-        trafficToAdd
+        trafficToAdd,
+        currentUserExpiry // Pass the current expiry to prevent double crediting
       );
 
       if (creditsResult.success) {
@@ -454,28 +734,26 @@ async function handleCombinedPayment(event: PaystackWebhookEvent, paymentDetails
           daysAdded: paymentDetails.timeunitexp,
           trafficAdded: trafficToAdd,
           newExpiry: creditsResult.newExpiry,
-          // Task 2.3.2: Proper expiry calculation completed by addCreditsToUser
-          // Task 2.3.3: Traffic limits and bandwidth handled via trafficToAdd parameter
-          // Task 2.3.4: Account status updated via RADIUS API call in addCreditsToUser
+          totalAmountPaid: paymentAmount
         });
 
-        // Update service plan transaction with actual expiry from RADIUS
-        if (creditsResult.newExpiry && servicePlanResult) {
+        // Update transaction with actual expiry from RADIUS
+        if (creditsResult.newExpiry && transactionResult) {
           try {
             const { error: updateError } = await supabaseAdmin
               .from('renewal_transactions')
               .update({ 
                 renewal_end_date: creditsResult.newExpiry 
               })
-              .eq('id', servicePlanResult.id);
+              .eq('id', transactionResult.id);
 
             if (updateError) {
-              console.error('Error updating service plan transaction expiry:', updateError);
+              console.error('Error updating transaction expiry:', updateError);
             } else {
-              console.log('Service plan transaction updated with actual expiry:', creditsResult.newExpiry);
+              console.log('Transaction updated with actual expiry:', creditsResult.newExpiry);
             }
           } catch (updateError) {
-            console.error('Exception updating service plan transaction expiry:', updateError);
+            console.error('Exception updating transaction expiry:', updateError);
           }
         }
       } else {
@@ -485,7 +763,6 @@ async function handleCombinedPayment(event: PaystackWebhookEvent, paymentDetails
         });
         
         // Even if credit application fails, we still return success for payment processing
-        // The transactions are recorded, but manual intervention may be needed for credits
         console.warn('Combined payment processed but manual credit application may be required');
       }
 
@@ -493,17 +770,25 @@ async function handleCombinedPayment(event: PaystackWebhookEvent, paymentDetails
         success: true,
         message: 'Combined payment processed successfully',
         reference: reference,
-        transactions: {
-          accountCreation: accountCreationResult.id,
-          servicePlan: servicePlanResult.id
+        transaction: {
+          id: transactionResult?.id,
+          amount: paymentAmount,
+          servicePlan: paymentDetails.servicePlanName
+        },
+        user: {
+          username: paymentDetails.username,
+          password: password,
+          servicePlan: paymentDetails.servicePlanName,
+          daysAdded: paymentDetails.timeunitexp,
+          newExpiry: creditsResult.newExpiry
         }
       });
 
     } catch (transactionError) {
-      console.error('Error recording combined payment transactions:', transactionError);
+      console.error('Error recording combined payment transaction:', transactionError);
       return NextResponse.json({
         success: false,
-        error: 'Failed to record transactions'
+        error: 'Failed to record transaction'
       }, { status: 500 });
     }
 
@@ -549,7 +834,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Extract payment metadata
-      const { username, srvid, timeunitexp, trafficunitcomb, limitcomb, purpose, locationId, isCombinedPayment, accountCreationFee, servicePlanPrice, servicePlanName } = extractPaymentMetadata(event);
+      const { username, srvid, timeunitexp, trafficunitcomb, limitcomb, purpose, locationId, isCombinedPayment, accountCreationFee, servicePlanPrice, servicePlanName, customerEmail } = extractPaymentMetadata(event);
 
       // Enhanced logging for payment type classification
       console.log('Payment metadata extracted:', {
@@ -571,6 +856,7 @@ export async function POST(request: NextRequest) {
           servicePlanName,
           locationId,
           username,
+          customerEmail,
           srvid,
           timeunitexp,
           trafficunitcomb,
@@ -706,6 +992,34 @@ async function checkExistingTransaction(reference: string): Promise<boolean> {
     console.error('Error checking existing transaction:', error);
     // If we can't check, assume it doesn't exist to avoid blocking legitimate payments
     return false;
+  }
+}
+
+// Check if user exists in RADIUS Manager
+async function checkRadiusUserExists(username: string): Promise<boolean> {
+  try {
+    const userUrl = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=get_userdata&username=${encodeURIComponent(username)}`;
+    const userResponse = await fetch(userUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'PHSWEB-NextJS-App/1.0',
+      },
+    });
+
+    if (userResponse.ok) {
+      const userResult = await userResponse.text();
+      const userData = JSON.parse(userResult);
+      
+      // Parse RADIUS response to check if user exists
+      if (Array.isArray(userData) && userData.length >= 2) {
+        const resultCode = userData[0];
+        return resultCode === 0; // 0 means user found, 1 means user not found
+      }
+    }
+    return false;
+  } catch (error) {
+    console.error('Error checking user existence:', error);
+    return false; // Assume user doesn't exist if check fails
   }
 }
 

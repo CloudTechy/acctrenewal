@@ -46,27 +46,28 @@ END $$;
 -- UPDATE RENEWAL TRANSACTIONS TABLE FOR ACCOUNT CREATION TRACKING
 -- ============================================================================
 
--- Add transaction_type column to track different types of transactions
-DO $$
-BEGIN
-    -- Check if transaction_type column already exists
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 'renewal_transactions' 
-        AND column_name = 'transaction_type'
-    ) THEN
-        -- Add the transaction_type column
-        ALTER TABLE renewal_transactions 
-        ADD COLUMN transaction_type VARCHAR(50) DEFAULT 'renewal';
-        
-        -- Add comment for the new column
-        COMMENT ON COLUMN renewal_transactions.transaction_type IS 'Type of transaction: renewal, account_creation, etc.';
-        
-        RAISE NOTICE 'Added transaction_type column to renewal_transactions table';
-    ELSE
-        RAISE NOTICE 'transaction_type column already exists in renewal_transactions table';
-    END IF;
-END $$;
+-- Add a new column to distinguish between renewal payments and account creation payments
+-- This allows us to track and report on account creation revenue separately
+
+ALTER TABLE renewal_transactions 
+ADD COLUMN IF NOT EXISTS transaction_type VARCHAR(20) DEFAULT 'renewal' 
+CHECK (transaction_type IN ('renewal', 'account_creation'));
+
+-- IMPORTANT: Remove unique constraint on paystack_reference to allow combined payments
+-- Combined payments create two transactions (account creation + service plan) with same reference
+DROP CONSTRAINT IF EXISTS renewal_transactions_paystack_reference_key;
+
+-- Create a composite unique constraint instead to prevent true duplicates
+-- This allows same reference with different transaction types (combined payments)
+-- but prevents duplicate transactions of the same type for the same reference
+CREATE UNIQUE INDEX IF NOT EXISTS idx_renewal_transactions_reference_type 
+ON renewal_transactions(paystack_reference, transaction_type);
+
+-- Add index for better performance when filtering by transaction type
+CREATE INDEX IF NOT EXISTS idx_renewal_transactions_type ON renewal_transactions(transaction_type);
+
+-- Add index for better performance when filtering by transaction type and date
+CREATE INDEX IF NOT EXISTS idx_renewal_transactions_type_date ON renewal_transactions(transaction_type, created_at);
 
 -- ============================================================================
 -- CREATE HELPER FUNCTION FOR ACCOUNT CREATION PRICING

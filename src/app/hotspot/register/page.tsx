@@ -26,6 +26,42 @@ import { useSearchParams } from 'next/navigation';
 import { generateHotspotPassword } from '@/lib/password-utils';
 import { generateWelcomeSMS, sendWelcomeSMS } from '@/lib/sms-utils';
 
+// Paystack types
+interface PaystackResponse {
+  reference: string;
+  status: string;
+  message: string;
+}
+
+interface PaystackHandler {
+  openIframe(): void;
+}
+
+interface PaystackPop {
+  setup(config: {
+    key: string;
+    email: string;
+    amount: number;
+    reference: string;
+    currency: string;
+    metadata?: {
+      custom_fields?: Array<{
+        display_name: string;
+        variable_name: string;
+        value: string;
+      }>;
+    };
+    callback: (response: PaystackResponse) => void;
+    onClose: () => void;
+  }): PaystackHandler;
+}
+
+declare global {
+  interface Window {
+    PaystackPop: PaystackPop;
+  }
+}
+
 interface ServicePlan {
   srvid: string;
   srvname: string;
@@ -101,7 +137,7 @@ function HotspotRegisterContent() {
     description: string;
   } | null>(null);
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
-  const [paymentStep, setPaymentStep] = useState<'selection' | 'payment' | 'verification'>('selection');
+  const [paymentStep, setPaymentStep] = useState<'selection' | 'payment' | 'verification' | 'completed'>('selection');
   const [registrationData, setRegistrationData] = useState<RegistrationData>({
     phone: '',
     firstName: '',
@@ -115,34 +151,38 @@ function HotspotRegisterContent() {
     locationId: searchParams.get('location') || ''
   });
 
+  // Load Paystack inline script for popup modal
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://js.paystack.co/v1/inline.js';
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      // Cleanup script on unmount
+      const existingScript = document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]');
+      if (existingScript) {
+        document.body.removeChild(existingScript);
+      }
+    };
+  }, []);
+
   // Check for payment reference in URL when component mounts
   useEffect(() => {
     const locationId = searchParams.get('location');
-    const paymentReference = searchParams.get('payment_reference');
     
+    console.log('URL Params Debug:', {
+      locationId,
+      allParams: Object.fromEntries(searchParams.entries())
+    });
+    
+    // Set location if present and fetch details
     if (locationId) {
       setRegistrationData(prev => ({ 
         ...prev, 
-        locationId,
-        paymentReference: paymentReference || undefined
+        locationId
       }));
       fetchLocationDetails(locationId);
-    }
-
-    // If returning from payment, set appropriate step
-    if (paymentReference) {
-      setPaymentStep('verification');
-      // Auto-populate form if we have the data in sessionStorage
-      const savedFormData = sessionStorage.getItem('registrationFormData');
-      if (savedFormData) {
-        try {
-          const formData = JSON.parse(savedFormData);
-          setRegistrationData(prev => ({ ...prev, ...formData, paymentReference }));
-          setCurrentStep(3); // Go to service plan step to complete registration
-        } catch (error) {
-          console.error('Error parsing saved form data:', error);
-        }
-      }
     }
   }, [searchParams]);
 
@@ -180,17 +220,23 @@ function HotspotRegisterContent() {
   // NEW: Fetch account creation pricing configuration
   const fetchPricingConfiguration = async (locationId: string) => {
     try {
+      console.log('Fetching pricing configuration for location:', locationId);
       const response = await fetch(`/api/locations/${locationId}/pricing`);
       const data = await response.json();
       
+      console.log('Pricing API response:', data);
+      
       if (data.success && data.data) {
-        setPricingConfig({
+        const config = {
           enabled: data.data.enabled,
           price: data.data.price,
           description: data.data.description
-        });
+        };
+        console.log('Setting pricing config:', config);
+        setPricingConfig(config);
       } else {
         // If pricing API fails, assume pricing is disabled
+        console.log('Pricing API failed or no data, disabling pricing');
         setPricingConfig({
           enabled: false,
           price: 0,
@@ -358,32 +404,52 @@ function HotspotRegisterContent() {
   };
 
   const submitRegistration = async () => {
+    console.log('submitRegistration called with data:', {
+      phone: registrationData.phone,
+      serviceId: registrationData.serviceId,
+      paymentReference: registrationData.paymentReference,
+      locationId: registrationData.locationId,
+      selectedServicePlan: registrationData.selectedServicePlan
+    });
+    
     try {
       setIsLoading(true);
       setError(null);
       
+      console.log('Making API request to /api/radius/register-user...');
+      
+      const requestBody = {
+        username: registrationData.phone,
+        password: registrationData.password,
+        firstname: registrationData.firstName,
+        lastname: registrationData.lastName,
+        email: registrationData.email,
+        address: registrationData.address,
+        city: registrationData.city,
+        state: registrationData.state,
+        phone: registrationData.phone,
+        srvid: registrationData.serviceId,
+        locationId: registrationData.locationId,
+        paymentReference: registrationData.paymentReference
+      };
+      
+      console.log('Request body:', requestBody);
+      
       const response = await fetch('/api/radius/register-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: registrationData.phone,
-          password: registrationData.password,
-          firstname: registrationData.firstName,
-          lastname: registrationData.lastName,
-          email: registrationData.email,
-          address: registrationData.address,
-          city: registrationData.city,
-          state: registrationData.state,
-          phone: registrationData.phone,
-          srvid: registrationData.serviceId,
-          locationId: registrationData.locationId,
-          paymentReference: registrationData.paymentReference
-        })
+        body: JSON.stringify(requestBody)
       });
+      
+      console.log('API response status:', response.status);
       
       const data = await response.json();
       
+      console.log('API response data:', data);
+      
       if (data.success) {
+        console.log('Registration successful! Proceeding to SMS and step 4...');
+        
         // Send welcome SMS after successful registration
         try {
           const welcomeMessage = generateWelcomeSMS({
@@ -399,24 +465,35 @@ function HotspotRegisterContent() {
           if (!smsData.success) {
             console.error('SMS sending failed:', smsData.error);
             setError('Account created successfully, but SMS notification failed. Please save your credentials.');
+          } else {
+            console.log('SMS sent successfully');
           }
         } catch (smsError) {
           console.error('SMS error:', smsError);
           setError('Account created successfully, but SMS notification failed. Please save your credentials.');
         }
         
+        console.log('Setting currentStep to 4 (confirmation)...');
         setCurrentStep(4);
+        
+        // Clear sessionStorage after successful registration
+        sessionStorage.removeItem('registrationFormData');
+        console.log('Cleared sessionStorage');
+        
       } else {
+        console.error('Registration failed:', data.error);
         setError(data.error || 'Registration failed');
       }
-    } catch {
+    } catch (error) {
+      console.error('Error in submitRegistration:', error);
       setError('Error creating account');
     } finally {
+      console.log('submitRegistration finally block - setting isLoading to false');
       setIsLoading(false);
     }
   };
 
-  // NEW: Initiate combined payment
+  // NEW: Initiate popup payment instead of redirect
   const initiatePayment = async () => {
     if (!registrationData.selectedServicePlan || !pricingConfig?.enabled) {
       setError('Invalid payment configuration');
@@ -427,7 +504,7 @@ function HotspotRegisterContent() {
       setIsPaymentProcessing(true);
       setError(null);
 
-      // Save form data to sessionStorage before redirect
+      // Save form data to sessionStorage for reliability
       sessionStorage.setItem('registrationFormData', JSON.stringify({
         phone: registrationData.phone,
         firstName: registrationData.firstName,
@@ -437,6 +514,8 @@ function HotspotRegisterContent() {
         city: registrationData.city,
         state: registrationData.state,
         serviceId: registrationData.serviceId,
+        password: registrationData.password,
+        locationId: registrationData.locationId,
         selectedServicePlan: registrationData.selectedServicePlan,
         servicePlanPrice: registrationData.servicePlanPrice,
         accountCreationFee: registrationData.accountCreationFee,
@@ -464,17 +543,183 @@ function HotspotRegisterContent() {
       const data = await response.json();
 
       if (data.success) {
-        // Redirect to Paystack payment page
-        window.location.href = data.data.authorization_url;
+        // Initialize Paystack popup instead of redirect
+        const paystack = window.PaystackPop;
+        if (!paystack) {
+          setError('Payment system not loaded. Please refresh and try again.');
+          return;
+        }
+
+        const metadata = {
+          custom_fields: [
+            {
+              display_name: "Purpose",
+              variable_name: "purpose",
+              value: data.data.servicePlanPrice ? "Combined Account Creation & Service Plan" : "Account Creation"
+            },
+            {
+              display_name: "Customer Name",
+              variable_name: "customer_name",
+              value: `${registrationData.firstName} ${registrationData.lastName}`
+            },
+            {
+              display_name: "Phone",
+              variable_name: "phone",
+              value: registrationData.phone
+            },
+            {
+              display_name: "Email",
+              variable_name: "email",
+              value: registrationData.email
+            },
+            {
+              display_name: "Location ID",
+              variable_name: "location_id",
+              value: registrationData.locationId
+            },
+            {
+              display_name: "Account Creation Fee",
+              variable_name: "account_creation_fee",
+              value: data.data.accountCreationFee.toString()
+            },
+            {
+              display_name: "Service Plan ID",
+              variable_name: "srvid",
+              value: registrationData.serviceId
+            },
+            {
+              display_name: "Service Plan Name",
+              variable_name: "service_plan_name",
+              value: registrationData.selectedServicePlan?.srvname || ''
+            },
+            {
+              display_name: "Service Plan Price",
+              variable_name: "service_plan_price",
+              value: data.data.servicePlanPrice?.toString() || '0'
+            },
+            {
+              display_name: "Service Plan Duration",
+              variable_name: "timeunitexp",
+              value: (() => {
+                // Extract duration from service plan
+                const plan = registrationData.selectedServicePlan;
+                
+                console.log('🔍 [DEBUG] Payment metadata - extracting timeunitexp:', {
+                  plan_exists: !!plan,
+                  plan_srvid: plan?.srvid,
+                  plan_srvname: plan?.srvname,
+                  plan_timeunitexp_raw: plan?.timeunitexp,
+                  plan_timeunitexp_type: typeof plan?.timeunitexp,
+                  plan_timebaseexp: plan?.timebaseexp,
+                  full_plan: plan
+                });
+                
+                let duration = parseInt(plan?.timeunitexp || '0');
+                
+                console.log('🔍 [DEBUG] After parseInt:', {
+                  original_timeunitexp: plan?.timeunitexp,
+                  parsed_duration: duration,
+                  is_zero: duration === 0
+                });
+                
+                // If timeunitexp is 0 (unlimited), try to extract from plan name
+                if (duration === 0 && plan?.srvname) {
+                  console.log('🔍 [DEBUG] timeunitexp is 0, trying to extract from plan name:', plan.srvname);
+                  // Extract numbers followed by "day" or "days" from plan name
+                  const dayMatch = plan.srvname.match(/(\d+)\s*days?/i);
+                  console.log('🔍 [DEBUG] Regex match result:', dayMatch);
+                  if (dayMatch) {
+                    duration = parseInt(dayMatch[1]);
+                    console.log('🔍 [DEBUG] Extracted duration from plan name:', duration);
+                  }
+                }
+                
+                // Default to 30 days if still 0 or invalid
+                const finalDuration = duration > 0 ? duration.toString() : '30';
+                
+                console.log('🔍 [DEBUG] Final timeunitexp decision:', {
+                  duration_after_extraction: duration,
+                  duration_greater_than_zero: duration > 0,
+                  final_value_returned: finalDuration,
+                  logic_used: duration > 0 ? 'using_parsed_duration' : 'using_default_30'
+                });
+                
+                return finalDuration;
+              })()
+            },
+            {
+              display_name: "Traffic Limit",
+              variable_name: "trafficunitcomb",
+              value: '0' // Default value since not available in ServicePlan interface
+            },
+            {
+              display_name: "Traffic Type",
+              variable_name: "limitcomb",
+              value: '0' // Default value since not available in ServicePlan interface
+            }
+          ]
+        };
+
+        console.log('Paystack popup metadata:', metadata);
+
+        const handler = paystack.setup({
+          key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
+          email: registrationData.email,
+          amount: Math.round(data.data.amount * 100), // Convert Naira to kobo
+          reference: data.data.reference,
+          currency: 'NGN',
+          metadata,
+          callback: (response: PaystackResponse) => {
+            console.log('Payment successful:', response);
+            // Set payment reference and proceed to success
+            setRegistrationData(prev => ({ ...prev, paymentReference: response.reference }));
+            setPaymentStep('completed');
+            
+            // Since webhook handles user creation, proceed directly to confirmation
+            console.log('Payment completed - webhook will handle user creation');
+            
+            // Send SMS and proceed to confirmation step
+            setTimeout(async () => {
+              try {
+                const welcomeMessage = generateWelcomeSMS({
+                  firstName: registrationData.firstName,
+                  phone: registrationData.phone,
+                  password: registrationData.password,
+                  locationName: locationDetails?.display_name
+                });
+                
+                const smsResponse = await sendWelcomeSMS(registrationData.phone, welcomeMessage);
+                const smsData = await smsResponse.json();
+                
+                if (!smsData.success) {
+                  console.error('SMS sending failed:', smsData.error);
+                  setError('Account created successfully, but SMS notification failed. Please save your credentials.');
+                } else {
+                  console.log('SMS sent successfully');
+                }
+              } catch (smsError) {
+                console.error('SMS error:', smsError);
+                setError('Account created successfully, but SMS notification failed. Please save your credentials.');
+              }
+              
+              setCurrentStep(4);
+              sessionStorage.removeItem('registrationFormData');
+              setIsLoading(false);
+            }, 2000); // Give webhook some time to process
+          },
+          onClose: () => {
+            console.log('Payment popup closed');
+            setIsPaymentProcessing(false);
+          }
+        });
+
+        handler.openIframe();
       } else {
         setError(data.error || 'Failed to initiate payment');
-        // Clear saved data on error
-        sessionStorage.removeItem('registrationFormData');
       }
     } catch (error) {
       console.error('Payment initiation error:', error);
       setError('Error initiating payment');
-      sessionStorage.removeItem('registrationFormData');
     } finally {
       setIsPaymentProcessing(false);
     }
@@ -501,13 +746,45 @@ function HotspotRegisterContent() {
         return;
       }
       
-      // NEW: Check if payment is required
-      if (pricingConfig?.enabled) {
-        // Initiate payment process
+      // NEW: Check if payment is required based on service plan price
+      const selectedPlan = servicePlans.find(plan => plan.srvid === registrationData.serviceId);
+      
+      console.log('🔍 [DEBUG] handleNext - Payment decision logic:', {
+        registrationData_serviceId: registrationData.serviceId,
+        selectedPlan_found: !!selectedPlan,
+        selectedPlan_srvid: selectedPlan?.srvid,
+        selectedPlan_srvname: selectedPlan?.srvname,
+        selectedPlan_timeunitexp: selectedPlan?.timeunitexp,
+        registrationData_selectedServicePlan: registrationData.selectedServicePlan,
+        registrationData_selectedServicePlan_timeunitexp: registrationData.selectedServicePlan?.timeunitexp,
+        plans_match: selectedPlan?.srvid === registrationData.selectedServicePlan?.srvid
+      });
+      
+      const planPrice = selectedPlan ? 
+        parseFloat(selectedPlan.unitprice) + parseFloat(selectedPlan.unitpriceadd || '0') + 
+        parseFloat(selectedPlan.unitpricetax || '0') + parseFloat(selectedPlan.unitpriceaddtax || '0') : 0;
+      
+      const requiresPayment = pricingConfig?.enabled && planPrice > 0;
+      
+      // Debug logging
+      console.log('Payment Decision Debug:', {
+        selectedPlan: selectedPlan?.srvname,
+        planPrice,
+        pricingConfigEnabled: pricingConfig?.enabled,
+        pricingConfigPrice: pricingConfig?.price,
+        requiresPayment,
+        locationId: registrationData.locationId,
+        paymentStep
+      });
+      
+      if (requiresPayment) {
+        // Initiate payment process for paid plans
+        console.log('Initiating payment process...');
         setPaymentStep('payment');
         initiatePayment();
       } else {
-        // Proceed with free registration
+        // Proceed with free registration for free plans or when pricing is disabled
+        console.log('Proceeding with free registration...');
         submitRegistration();
       }
     }
@@ -767,7 +1044,16 @@ function HotspotRegisterContent() {
                       <p className="text-gray-400">Select the perfect internet plan for your needs</p>
                     </div>
 
-                    {isLoading ? (
+                    {/* Auto-completion message when returning from payment */}
+                    {registrationData.paymentReference && paymentStep === 'completed' && isLoading && (
+                      <div className="text-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-white mb-2">Payment Successful!</h3>
+                        <p className="text-gray-400">Completing your account registration...</p>
+                      </div>
+                    )}
+
+                    {isLoading && !(registrationData.paymentReference && paymentStep === 'completed') ? (
                       <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
                         <span className="ml-2 text-gray-400">Loading plans...</span>
@@ -777,7 +1063,11 @@ function HotspotRegisterContent() {
                         {servicePlans.map((plan) => {
                           const planPrice = parseFloat(plan.unitprice) + parseFloat(plan.unitpriceadd || '0') + 
                                           parseFloat(plan.unitpricetax || '0') + parseFloat(plan.unitpriceaddtax || '0');
-                          const totalCost = pricingConfig?.enabled ? pricingConfig.price + planPrice : planPrice;
+                          
+                          // NEW: Only charge account creation fee for paid plans (not free plans)
+                          const shouldChargeAccountFee = pricingConfig?.enabled && planPrice > 0;
+                          const accountFee = shouldChargeAccountFee ? pricingConfig.price : 0;
+                          const totalCost = planPrice + accountFee;
                           
                           return (
                             <div
@@ -788,14 +1078,33 @@ function HotspotRegisterContent() {
                                   : 'border-gray-600 bg-gray-700/30 hover:border-gray-500'
                               }`}
                               onClick={() => {
-                                setRegistrationData(prev => ({ 
-                                  ...prev, 
-                                  serviceId: plan.srvid,
-                                  selectedServicePlan: plan,
-                                  servicePlanPrice: planPrice,
-                                  accountCreationFee: pricingConfig?.enabled ? pricingConfig.price : 0,
-                                  totalAmount: totalCost
-                                }));
+                                console.log('🔍 [DEBUG] Service plan clicked:', {
+                                  srvid: plan.srvid,
+                                  srvname: plan.srvname,
+                                  timeunitexp: plan.timeunitexp,
+                                  timebaseexp: plan.timebaseexp,
+                                  rawPlan: plan
+                                });
+                                
+                                setRegistrationData(prev => {
+                                  const newData = { 
+                                    ...prev, 
+                                    serviceId: plan.srvid,
+                                    selectedServicePlan: plan,
+                                    servicePlanPrice: planPrice,
+                                    accountCreationFee: accountFee,
+                                    totalAmount: totalCost
+                                  };
+                                  
+                                  console.log('🔍 [DEBUG] Updated registrationData with selectedServicePlan:', {
+                                    serviceId: newData.serviceId,
+                                    selectedServicePlan: newData.selectedServicePlan,
+                                    selectedServicePlan_timeunitexp: newData.selectedServicePlan?.timeunitexp,
+                                    selectedServicePlan_timebaseexp: newData.selectedServicePlan?.timebaseexp
+                                  });
+                                  
+                                  return newData;
+                                });
                               }}
                             >
                               <div className="flex items-center justify-between mb-3">
@@ -822,13 +1131,21 @@ function HotspotRegisterContent() {
                                   </span>
                                 </div>
                                 
-                                {/* Account Creation Fee (if enabled) */}
-                                {pricingConfig?.enabled && (
+                                {/* Account Creation Fee (only show if applicable) */}
+                                {shouldChargeAccountFee && (
                                   <div className="flex justify-between items-center text-sm">
                                     <span className="text-gray-300">Account Setup:</span>
                                     <span className="text-white font-medium">
                                       {formatCurrency(pricingConfig.price.toString())}
                                     </span>
+                                  </div>
+                                )}
+                                
+                                {/* Free Account Setup Message for free plans */}
+                                {pricingConfig?.enabled && planPrice === 0 && (
+                                  <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-300">Account Setup:</span>
+                                    <span className="text-green-400 font-medium">Free</span>
                                   </div>
                                 )}
                                 
@@ -987,9 +1304,19 @@ function HotspotRegisterContent() {
                     ) : (
                       <>
                         {currentStep === 3 ? (
-                          pricingConfig?.enabled && paymentStep === 'selection' ? 
-                          `Pay ₦${registrationData.totalAmount?.toLocaleString() || '0'} & Create Account` :
-                          'Create Account'
+                          (() => {
+                            const selectedPlan = servicePlans.find(plan => plan.srvid === registrationData.serviceId);
+                            const planPrice = selectedPlan ? 
+                              parseFloat(selectedPlan.unitprice) + parseFloat(selectedPlan.unitpriceadd || '0') + 
+                              parseFloat(selectedPlan.unitpricetax || '0') + parseFloat(selectedPlan.unitpriceaddtax || '0') : 0;
+                            const requiresPayment = pricingConfig?.enabled && planPrice > 0;
+                            
+                            if (requiresPayment && paymentStep === 'selection') {
+                              return `Pay ₦${registrationData.totalAmount?.toLocaleString() || '0'} & Create Account`;
+                            } else {
+                              return 'Create Account';
+                            }
+                          })()
                         ) : 'Continue'}
                         {currentStep < 3 && <ArrowRight className="h-4 w-4 ml-2" />}
                       </>
