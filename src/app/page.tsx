@@ -450,10 +450,10 @@ const UserDetails: React.FC<UserDetailsProps> = ({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6"
+        className="grid grid-cols-1 md:grid-cols-2 gap-6"
       >
         {/* Account Status Card */}
-        <Card className="border-gray-700/50 bg-gray-900/80 backdrop-blur-sm shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 lg:col-span-2">
+        <Card className="border-gray-700/50 bg-gray-900/80 backdrop-blur-sm shadow-2xl hover:shadow-blue-500/10 transition-all duration-300">
           <CardHeader className="pb-4">
             <div className="flex items-center gap-3">
               <div className="rounded-xl bg-blue-500/20 p-3 text-blue-400 ring-1 ring-blue-500/30">
@@ -463,31 +463,31 @@ const UserDetails: React.FC<UserDetailsProps> = ({
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 px-4 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                <span className="text-gray-400 font-medium text-sm mb-1 sm:mb-0">Status</span>
-                <span className={`font-bold px-3 py-1.5 rounded-lg text-xs uppercase tracking-wider w-fit ${accountStatus.color} ${accountStatus.bgColor} border ${accountStatus.borderColor}`}>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-gray-400 font-medium text-sm">Status</span>
+                <span className={`font-bold px-3 py-1.5 rounded-lg text-xs uppercase tracking-wider ${accountStatus.color} ${accountStatus.bgColor} border ${accountStatus.borderColor}`}>
                   {accountStatus.status}
                 </span>
               </div>
               
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 px-4 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                <span className="text-gray-400 font-medium text-sm mb-1 sm:mb-0">Username</span>
-                <span className="text-gray-100 font-bold text-base break-all">
+              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-gray-400 font-medium text-sm">Username</span>
+                <span className="text-gray-100 font-bold text-lg">
                   {originalUsername || 'N/A'}
                 </span>
               </div>
               
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 px-4 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                <span className="text-gray-400 font-medium text-sm mb-1 sm:mb-0">Expiry Date</span>
-                <span className={`font-semibold text-sm ${accountStatus.status === 'EXPIRED' ? 'text-red-400' : 'text-green-400'}`}>
+              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-gray-400 font-medium text-sm">Expiry Date</span>
+                <span className={`font-semibold text-right text-sm ${accountStatus.status === 'EXPIRED' ? 'text-red-400' : 'text-green-400'}`}>
                   {formatDate(userData.expiry || '')}
                 </span>
               </div>
 
               {daysToExpiry !== null && (
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 px-4 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                  <span className="text-gray-400 font-medium text-sm mb-1 sm:mb-0">Days to Expiry</span>
+                <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                  <span className="text-gray-400 font-medium text-sm">Days to Expiry</span>
                   <span className={`font-bold text-lg ${
                     daysToExpiry <= 0 ? 'text-red-400' : 
                     daysToExpiry <= 7 ? 'text-yellow-400' : 
@@ -541,7 +541,7 @@ const UserDetails: React.FC<UserDetailsProps> = ({
             <div className="space-y-3">
               <div className="text-center py-4 px-3 bg-gradient-to-r from-green-600/20 to-blue-600/20 rounded-xl border border-green-500/30 ring-1 ring-green-500/10">
                 <span className="text-gray-400 text-xs block mb-2 uppercase tracking-wider font-medium">Plan Name</span>
-                <span className="text-gray-100 font-bold text-lg leading-tight break-words">
+                <span className="text-gray-100 font-bold text-lg leading-tight">
                   {servicePlan.srvname || 'Loading...'}
                 </span>
               </div>
@@ -551,16 +551,16 @@ const UserDetails: React.FC<UserDetailsProps> = ({
                 <span className="text-yellow-400 font-bold text-2xl">
                   {formatCurrency(servicePlan.totalPrice || 0)}
                 </span>
-                {(servicePlan.unitpricetax && Number(servicePlan.unitpricetax) > 0) && (
+                {(servicePlan.unitpricetax && servicePlan.unitpricetax > 0) && (
                   <div className="text-xs text-gray-400 mt-2 space-x-1">
-                    <span>Base: {formatCurrency(Number(servicePlan.unitprice) || 0)}</span>
+                    <span>Base: {formatCurrency(servicePlan.unitprice || 0)}</span>
                     <span>•</span>
-                    <span>Tax: {formatCurrency(Number(servicePlan.unitpricetax) || 0)}</span>
+                    <span>Tax: {formatCurrency(servicePlan.unitpricetax || 0)}</span>
                   </div>
                 )}
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 {servicePlan.timeunitexp && (
                   <div className="text-center py-3 px-2 bg-blue-600/10 rounded-lg border border-blue-500/20">
                     <span className="text-gray-400 text-xs block mb-1 uppercase tracking-wider font-medium">Validity</span>
@@ -573,7 +573,7 @@ const UserDetails: React.FC<UserDetailsProps> = ({
                 {servicePlan.poolname && (
                   <div className="text-center py-3 px-2 bg-purple-600/10 rounded-lg border border-purple-500/20">
                     <span className="text-gray-400 text-xs block mb-1 uppercase tracking-wider font-medium">IP Pool</span>
-                    <span className="text-purple-300 font-bold text-sm break-words">
+                    <span className="text-purple-300 font-bold text-sm truncate">
                       {servicePlan.poolname}
                     </span>
                   </div>
@@ -595,31 +595,31 @@ const UserDetails: React.FC<UserDetailsProps> = ({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-3">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 px-4 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                <span className="text-gray-400 font-medium text-sm mb-1 sm:mb-0">Name</span>
-                <span className="text-gray-100 font-semibold text-sm break-words">
+              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-gray-400 font-medium text-sm">Name</span>
+                <span className="text-gray-100 font-semibold text-right text-sm">
                   {userData.firstname} {userData.lastname}
                 </span>
               </div>
               
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start py-3 px-4 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                <span className="text-gray-400 font-medium text-sm mb-1 sm:mb-0">Email</span>
-                <span className="text-gray-100 font-medium text-sm break-all">
+              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-gray-400 font-medium text-sm">Email</span>
+                <span className="text-gray-100 font-medium text-right text-sm break-all">
                   {userData.email || 'Not provided'}
                 </span>
               </div>
               
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 px-4 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                <span className="text-gray-400 font-medium text-sm mb-1 sm:mb-0">Phone</span>
-                <span className="text-gray-100 font-medium text-sm break-all">
+              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-gray-400 font-medium text-sm">Phone</span>
+                <span className="text-gray-100 font-medium text-right text-sm">
                   {formatPhoneNumber(userData.phone || userData.mobile || '')}
                 </span>
               </div>
               
               {(userData.address || userData.city || userData.state || userData.country) && (
-                <div className="py-3 px-4 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <div className="py-3 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
                   <span className="text-gray-400 font-medium text-sm block mb-2">Address</span>
-                  <span className="text-gray-100 font-medium text-sm leading-relaxed break-words">
+                  <span className="text-gray-100 font-medium text-sm leading-relaxed">
                     {[userData.address, userData.city, userData.state, userData.country]
                       .filter(Boolean)
                       .join(', ')}
@@ -1343,30 +1343,28 @@ const ISPLandingPage: React.FC = () => {
                 <div className="mt-12 w-full max-w-6xl">
                   {userData && servicePlan ? (
                     <div className="space-y-6">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
-                        <h2 className="text-2xl font-bold text-white">Account Information</h2>
-                        <div className="flex flex-col gap-2 sm:flex-row sm:gap-2">
+                      <div className="flex flex-col space-y-4 lg:flex-row lg:justify-between lg:items-center lg:space-y-0">
+                        <h2 className="text-xl sm:text-2xl font-bold text-white text-center lg:text-left">Account Information</h2>
+                        <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
                           <Button 
                             onClick={() => refreshAccountDataWithRetry(originalUsername)}
                             disabled={isLoading}
-                            className="bg-purple-600/80 hover:bg-purple-700/80 text-gray-100 hover:text-white border border-purple-500/50 hover:border-purple-400 px-3 py-2 rounded-lg font-semibold text-sm shadow-lg backdrop-blur-sm transition-all duration-200 transform hover:scale-105 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full sm:w-auto bg-purple-600/80 hover:bg-purple-700/80 text-gray-100 hover:text-white border border-purple-500/50 hover:border-purple-400 px-3 sm:px-4 py-2 rounded-lg font-semibold text-xs sm:text-sm shadow-lg backdrop-blur-sm transition-all duration-200 transform hover:scale-105 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {isLoading ? (
                               <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2"></div>
                             ) : (
-                              <RefreshCw className="mr-2 h-4 w-4" />
+                              <RefreshCw className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                             )}
-                            <span className="hidden sm:inline">Refresh</span>
-                            <span className="sm:hidden">Refresh Account</span>
+                            <span className="whitespace-nowrap">Refresh</span>
                           </Button>
                           <Button 
                             onClick={resetForm}
                             disabled={isLoading}
-                            className="bg-gray-700/80 hover:bg-gray-600/80 text-gray-100 hover:text-white border border-gray-500/50 hover:border-gray-400 px-3 py-2 rounded-lg font-semibold text-sm shadow-lg backdrop-blur-sm transition-all duration-200 transform hover:scale-105 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full sm:w-auto bg-gray-700/80 hover:bg-gray-600/80 text-gray-100 hover:text-white border border-gray-500/50 hover:border-gray-400 px-3 sm:px-4 py-2 rounded-lg font-semibold text-xs sm:text-sm shadow-lg backdrop-blur-sm transition-all duration-200 transform hover:scale-105 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            <Search className="mr-2 h-4 w-4" />
-                            <span className="hidden sm:inline">Search Another Account</span>
-                            <span className="sm:hidden">New Search</span>
+                            <Search className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                            <span className="whitespace-nowrap">Search Another Account</span>
                           </Button>
                         </div>
                       </div>
