@@ -539,46 +539,46 @@ const UserDetails: React.FC<UserDetailsProps> = ({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-3">
-              <div className="text-center py-4 px-3 bg-gradient-to-r from-green-600/20 to-blue-600/20 rounded-xl border border-green-500/30 ring-1 ring-green-500/10">
-                <span className="text-gray-400 text-xs block mb-2 uppercase tracking-wider font-medium">Plan Name</span>
-                <span className="text-gray-100 font-bold text-lg leading-tight">
+              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-gray-400 font-medium text-sm">Plan Name</span>
+                <span className="text-gray-100 font-bold text-sm text-right">
                   {servicePlan.srvname || 'Loading...'}
                 </span>
               </div>
               
-              <div className="text-center py-4 px-3 bg-gradient-to-r from-yellow-600/20 to-orange-600/20 rounded-xl border border-yellow-500/30 ring-1 ring-yellow-500/10">
-                <span className="text-gray-400 text-xs block mb-2 uppercase tracking-wider font-medium">Monthly Price</span>
-                <span className="text-yellow-400 font-bold text-2xl">
-                  {formatCurrency(servicePlan.totalPrice || 0)}
-                </span>
-                {(servicePlan.unitpricetax && servicePlan.unitpricetax > 0) && (
-                  <div className="text-xs text-gray-400 mt-2 space-x-1">
-                    <span>Base: {formatCurrency(servicePlan.unitprice || 0)}</span>
-                    <span>•</span>
-                    <span>Tax: {formatCurrency(servicePlan.unitpricetax || 0)}</span>
-                  </div>
-                )}
+              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-gray-400 font-medium text-sm">Monthly Price</span>
+                <div className="text-right">
+                  <span className="text-yellow-400 font-bold text-lg">
+                    {formatCurrency(servicePlan.totalPrice || 0)}
+                  </span>
+                  {(servicePlan.unitpricetax && Number(servicePlan.unitpricetax) > 0) && (
+                    <div className="text-xs text-gray-400 mt-1">
+                      <span>Base: {formatCurrency(Number(servicePlan.unitprice) || 0)}</span>
+                      <span className="mx-1">•</span>
+                      <span>Tax: {formatCurrency(Number(servicePlan.unitpricetax) || 0)}</span>
+                    </div>
+                  )}
+                </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-3">
-                {servicePlan.timeunitexp && (
-                  <div className="text-center py-3 px-2 bg-blue-600/10 rounded-lg border border-blue-500/20">
-                    <span className="text-gray-400 text-xs block mb-1 uppercase tracking-wider font-medium">Validity</span>
-                    <span className="text-blue-300 font-bold text-sm">
-                      {servicePlan.timeunitexp} days
-                    </span>
-                  </div>
-                )}
+              {servicePlan.timeunitexp && (
+                <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                  <span className="text-gray-400 font-medium text-sm">Validity</span>
+                  <span className="text-blue-300 font-bold text-sm">
+                    {servicePlan.timeunitexp} days
+                  </span>
+                </div>
+              )}
 
-                {servicePlan.poolname && (
-                  <div className="text-center py-3 px-2 bg-purple-600/10 rounded-lg border border-purple-500/20">
-                    <span className="text-gray-400 text-xs block mb-1 uppercase tracking-wider font-medium">IP Pool</span>
-                    <span className="text-purple-300 font-bold text-sm truncate">
-                      {servicePlan.poolname}
-                    </span>
-                  </div>
-                )}
-              </div>
+              {servicePlan.poolname && (
+                <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                  <span className="text-gray-400 font-medium text-sm">IP Pool</span>
+                  <span className="text-purple-300 font-bold text-sm text-right break-all">
+                    {servicePlan.poolname}
+                  </span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
