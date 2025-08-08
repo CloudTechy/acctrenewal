@@ -501,6 +501,14 @@ const UserDetails: React.FC<UserDetailsProps> = ({
 
             {/* Payment and Plan Change Buttons */}
             <div className="pt-4 space-y-3 border-t border-gray-700/30">
+              <PaymentButton
+                paystackConfig={paystackConfig}
+                onPaymentSuccess={onPaymentSuccess}
+                onPaymentClose={onPaymentClose}
+                isProcessingPayment={isProcessingPayment}
+                servicePlan={servicePlan}
+              />
+              
               {/* Show Change Plan button for all account types */}
               <ChangePlanButton
                 currentPlan={servicePlan}
@@ -509,14 +517,6 @@ const UserDetails: React.FC<UserDetailsProps> = ({
                 username={originalUsername}
                 onPlanChangeSuccess={onPlanChangeSuccess}
                 isLoading={isProcessingPayment}
-              />
-              
-              <PaymentButton
-                paystackConfig={paystackConfig}
-                onPaymentSuccess={onPaymentSuccess}
-                onPaymentClose={onPaymentClose}
-                isProcessingPayment={isProcessingPayment}
-                servicePlan={servicePlan}
               />
               
               <p className="text-gray-400 text-xs text-center leading-relaxed">
@@ -751,7 +751,7 @@ const Navbar: React.FC<{ onHomeClick?: () => void }> = ({ onHomeClick }) => {
               <Link href="/" onClick={handleHomeClick} className="flex items-center space-x-2">
                 <img 
                   src="/phsweblogo.png" 
-                  alt="PHSWEB Internet" 
+                  alt="Sabi-WiFi by PHSWEB" 
                   className="h-16 w-auto"
                 />
               </Link>
@@ -1416,7 +1416,7 @@ const ISPLandingPage: React.FC = () => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center justify-between md:flex-row max-w-6xl mx-auto">
             <div className="mb-8 md:mb-0 text-center md:text-left">
-              <span className="text-blue-400 font-bold text-xl">PHSWEB Internet</span>
+              <span className="text-blue-400 font-bold text-xl">Sabi-WiFi by PHSWEB</span>
               <p className="mt-3 text-gray-400 text-justify max-w-xs">
                 Providing reliable internet services since 2022
               </p>
@@ -1434,7 +1434,7 @@ const ISPLandingPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-12 border-t border-gray-700/50 pt-8 text-center text-gray-400">
-            &copy; {new Date().getFullYear()} PHSWEB Internet. All rights reserved.
+            &copy; {new Date().getFullYear()} Sabi-WiFi by PHSWEB. All rights reserved.
           </div>
         </div>
       </footer>

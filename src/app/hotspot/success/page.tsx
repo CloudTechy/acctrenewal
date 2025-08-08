@@ -29,7 +29,7 @@ export default function HotspotSuccessPage() {
               </div>
             </motion.div>
             <h1 className="text-2xl font-bold text-gray-900">Connected Successfully!</h1>
-            <p className="text-gray-600 mt-2">You are now connected to PHSWEB Internet</p>
+            <p className="text-gray-600 mt-2">You are now connected to Sabi-WiFi by PHSWEB</p>
           </CardHeader>
           
           <CardContent className="space-y-6">

@@ -51,11 +51,11 @@ const ChangePlanButton: React.FC<ChangePlanButtonProps> = ({
   // Get button style based on account status
   const getButtonStyle = () => {
     if (accountStatus === 'EXPIRED') {
-      return 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white';
+      return 'bg-gray-700 hover:bg-gray-600 text-gray-200 border-gray-600 hover:border-gray-500';
     } else if (isOnFreePlan(currentPlan)) {
-      return 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white';
+      return 'bg-gray-700 hover:bg-gray-600 text-gray-200 border-gray-600 hover:border-gray-500';
     } else {
-      return 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white';
+      return 'bg-gray-700 hover:bg-gray-600 text-gray-200 border-gray-600 hover:border-gray-500';
     }
   };
 
@@ -123,7 +123,7 @@ const ChangePlanButton: React.FC<ChangePlanButtonProps> = ({
       <button
         onClick={() => setShowPlanModal(true)}
         disabled={disabled || isLoading || isProcessing}
-        className={`h-12 px-6 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border-2 ${getButtonStyle()}`}
+        className={`h-10 px-4 text-sm font-medium rounded-lg transition-all hover:scale-102 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border ${getButtonStyle()}`}
       >
         <div className="flex items-center gap-2">
           {isLoading || isProcessing ? (

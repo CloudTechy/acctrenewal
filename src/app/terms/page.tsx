@@ -16,7 +16,7 @@ const TermsPage: React.FC = () => {
             <Link href="/" className="flex items-center space-x-2">
               <img 
                 src="/phsweblogo.png" 
-                alt="PHSWEB Internet" 
+                alt="Sabi-WiFi by PHSWEB"
                 className="h-16 w-auto"
               />
             </Link>
@@ -63,7 +63,7 @@ const TermsPage: React.FC = () => {
                 Acceptance of Terms
               </h2>
               <p className="text-gray-300 leading-relaxed">
-                By accessing and using PHSWEB Internet services, you agree to be bound by these Terms of Service. 
+                By accessing and using Sabi-WiFi by PHSWEB services, you agree to be bound by these Terms of Service. 
                 If you do not agree to these terms, please do not use our services.
               </p>
             </section>
@@ -71,7 +71,7 @@ const TermsPage: React.FC = () => {
             <section>
               <h2 className="text-2xl font-semibold text-white mb-4">Internet Service</h2>
               <div className="space-y-4 text-gray-300">
-                <p>PHSWEB Internet provides residential and business internet connectivity services including:</p>
+                <p>Sabi-WiFi by PHSWEB provides residential and business internet connectivity services including:</p>
                 <ul className="list-disc list-inside space-y-2 ml-4">
                   <li>High-speed broadband internet access</li>
                   <li>Wi-Fi connectivity solutions</li>
@@ -136,7 +136,7 @@ const TermsPage: React.FC = () => {
             <section>
               <h2 className="text-2xl font-semibold text-white mb-4">Limitation of Liability</h2>
               <p className="text-gray-300 leading-relaxed">
-                PHSWEB Internet&apos;s liability is limited to the monthly service fee. We are not responsible 
+                Sabi-WiFi by PHSWEB&apos;s liability is limited to the monthly service fee. We are not responsible 
                 for indirect damages, data loss, or business interruption resulting from service use or outages.
               </p>
             </section>
@@ -176,7 +176,7 @@ const TermsPage: React.FC = () => {
       <footer className="bg-gray-900/80 backdrop-blur-sm border-t border-gray-700/50 py-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center justify-between md:flex-row">
-            <span className="text-blue-400 font-bold text-xl">PHSWEB Internet</span>
+            <span className="text-blue-400 font-bold text-xl">Sabi-WiFi by PHSWEB</span>
             <div className="flex space-x-6 mt-4 md:mt-0">
               <Link href="/terms" className="text-blue-400 hover:text-blue-300 transition-colors">
                 Terms
@@ -190,7 +190,7 @@ const TermsPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-4 text-center text-gray-400">
-            &copy; {new Date().getFullYear()} PHSWEB Internet. All rights reserved.
+            &copy; {new Date().getFullYear()} Sabi-WiFi by PHSWEB. All rights reserved.
           </div>
         </div>
       </footer>

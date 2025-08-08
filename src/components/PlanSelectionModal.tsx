@@ -347,8 +347,8 @@ const PlanSelectionModal: React.FC<PlanSelectionModalProps> = ({
           {/* Footer */}
           {eligiblePlans.length > 0 && (
             <div className="p-4 border-t border-gray-700 bg-gray-800/30">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-400">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="text-sm text-gray-400 flex-1">
                   {selectedPlan ? (
                     <span>
                       Selected: <span className="text-blue-400 font-medium">{selectedPlan.srvname}</span>
@@ -359,7 +359,7 @@ const PlanSelectionModal: React.FC<PlanSelectionModalProps> = ({
                   )}
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-shrink-0">
                   <button
                     onClick={onClose}
                     disabled={isLoading}
@@ -380,7 +380,7 @@ const PlanSelectionModal: React.FC<PlanSelectionModalProps> = ({
                     ) : (
                       <>
                         <Check className="h-3 w-3" />
-                        Change Plan (Free)
+                        Change Plan
                       </>
                     )}
                   </button>

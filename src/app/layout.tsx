@@ -13,28 +13,26 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PHSWEB unlimited Internet",
-  description: "Renew your PHSWEB Internet subscription easily. Stay connected with our premium internet services for uninterrupted access to high-speed internet.",
-  keywords: "PHSWEB, Internet, Subscription, Renewal, High-speed Internet, Nigeria, ISP",
-  authors: [{ name: "PHSWEB Internet" }],
-  icons: {
-    icon: [
-      { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
-      { url: '/favicon.png', sizes: '16x16', type: 'image/png' },
-    ],
-    apple: '/favicon.png',
-    shortcut: '/favicon.png',
-  },
+  title: "Sabi-WiFi by PHSWEB - Renew Your Internet Subscription",
+  description: "Renew your Sabi-WiFi by PHSWEB subscription easily. Stay connected with our premium internet services for uninterrupted access to high-speed internet.",
+  keywords: ["internet", "subscription", "renewal", "wifi", "broadband", "nigeria"],
+  authors: [{ name: "Sabi-WiFi by PHSWEB" }],
+  creator: "Sabi-WiFi by PHSWEB",
+  publisher: "Sabi-WiFi by PHSWEB",
+  robots: "index, follow",
+  viewport: "width=device-width, initial-scale=1",
+  themeColor: "#1f2937",
   openGraph: {
-    title: "PHSWEB unlimited Internet",
-    description: "Renew your PHSWEB Internet subscription easily. Stay connected with our premium internet services for uninterrupted access to high-speed internet.",
+    title: "Sabi-WiFi by PHSWEB - Renew Your Internet Subscription",
+    description: "Renew your Sabi-WiFi by PHSWEB subscription easily. Stay connected with our premium internet services for uninterrupted access to high-speed internet.",
     type: "website",
     locale: "en_US",
+    siteName: "Sabi-WiFi by PHSWEB",
   },
   twitter: {
     card: "summary_large_image",
-    title: "PHSWEB unlimited Internet",
-    description: "Renew your PHSWEB Internet subscription easily. Stay connected with our premium internet services for uninterrupted access to high-speed internet.",
+    title: "Sabi-WiFi by PHSWEB - Renew Your Internet Subscription",
+    description: "Renew your Sabi-WiFi by PHSWEB subscription easily. Stay connected with our premium internet services for uninterrupted access to high-speed internet.",
   },
 };
 

@@ -9,7 +9,7 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 
 const ContactPage: React.FC = () => {
   const handleWhatsAppChat = () => {
-    const message = encodeURIComponent('Hello! I need assistance with my PHSWEB Internet service.');
+    const message = encodeURIComponent('Hello! I need assistance with my Sabi-WiFi by PHSWEB service.');
     const whatsappUrl = `https://wa.me/2349076824134?text=${message}`;
     window.open(whatsappUrl, '_blank');
   };
@@ -23,7 +23,7 @@ const ContactPage: React.FC = () => {
             <Link href="/" className="flex items-center space-x-2">
               <img 
                 src="/phsweblogo.png" 
-                alt="PHSWEB Internet" 
+                alt="Sabi-WiFi by PHSWEB"
                 className="h-16 w-auto"
               />
             </Link>
@@ -214,7 +214,7 @@ const ContactPage: React.FC = () => {
       <footer className="bg-gray-900/80 backdrop-blur-sm border-t border-gray-700/50 py-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center justify-between md:flex-row">
-            <span className="text-blue-400 font-bold text-xl">PHSWEB Internet</span>
+            <span className="text-blue-400 font-bold text-xl">Sabi-WiFi by PHSWEB</span>
             <div className="flex space-x-6 mt-4 md:mt-0">
               <Link href="/terms" className="text-gray-400 hover:text-blue-400 transition-colors">
                 Terms
@@ -228,7 +228,7 @@ const ContactPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-4 text-center text-gray-400">
-            &copy; {new Date().getFullYear()} PHSWEB Internet. All rights reserved.
+            &copy; {new Date().getFullYear()} Sabi-WiFi by PHSWEB. All rights reserved.
           </div>
         </div>
       </footer>
