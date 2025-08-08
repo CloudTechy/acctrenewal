@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, Variants } from 'framer-motion';
-import { Search, Menu, X, User, Calendar, CreditCard, Globe } from 'lucide-react';
+import { Search, Menu, X, User, Calendar, CreditCard, Globe, RefreshCw } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import ChangePlanButton from '@/components/ChangePlanButton';
+import { ServicePlan, UserData, PaystackConfig } from '@/lib/types';
 
 // Dynamically import Paystack to avoid SSR issues
 const PaystackButton = dynamic(
@@ -15,68 +17,14 @@ const PaystackButton = dynamic(
   { ssr: false }
 );
 
-// Types for API responses
-interface UserData {
-  code: number;
-  enableuser?: number;
-  srvid?: number;
-  firstname?: string;
-  lastname?: string;
-  email?: string;
-  company?: string;
-  phone?: string;
-  mobile?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  country?: string;
-  credits?: number;
-  expiry?: string;
-  dlbytes?: number;
-  ulbytes?: number;
-  totalbytes?: number;
-  onlinetime?: number;
-  str?: string;
+// PaystackPop is loaded dynamically
+declare global {
+  interface Window {
+    PaystackPop: any;
+  }
 }
 
-interface ServicePlan {
-  code: number;
-  srvid?: number;
-  srvname?: string;
-  downrate?: number;
-  uprate?: number;
-  unitprice?: number;
-  unitpriceadd?: number;
-  unitpricetax?: number;
-  unitpriceaddtax?: number;
-  totalPrice?: number; // Calculated total price
-  timeunitexp?: number;
-  trafficunitdl?: number;
-  trafficunitul?: number;
-  trafficunitcomb?: number;
-  limitdl?: number;
-  limitul?: number;
-  limitcomb?: number;
-  limitexpiration?: number;
-  poolname?: string;
-  str?: string;
-}
-
-// Paystack types
-interface PaystackConfig {
-  reference: string;
-  email: string;
-  amount: number;
-  publicKey: string;
-  metadata?: {
-    custom_fields: Array<{
-      display_name: string;
-      variable_name: string;
-      value: string;
-    }>;
-  };
-}
-
+// Keep only the PaystackReference interface that's not in the unified types
 interface PaystackReference {
   reference: string;
   status: string;
@@ -212,10 +160,7 @@ const getServicePlan = async (srvid: number): Promise<ServicePlan> => {
           unitpriceadd: parseFloat(serviceData.unitpriceadd) || 0,
           unitpricetax: parseFloat(serviceData.unitpricetax) || 0,
           unitpriceaddtax: parseFloat(serviceData.unitpriceaddtax) || 0,
-          totalPrice: (parseFloat(serviceData.unitprice) || 0) + 
-                     (parseFloat(serviceData.unitpriceadd) || 0) + 
-                     (parseFloat(serviceData.unitpricetax) || 0) + 
-                     (parseFloat(serviceData.unitpriceaddtax) || 0),
+          totalPrice: (parseFloat(serviceData.unitprice) || 0) + (parseFloat(serviceData.unitpricetax) || 0),
           timeunitexp: parseInt(serviceData.timeunitexp) || 0,
           trafficunitdl: parseInt(serviceData.trafficunitdl) || 0,
           trafficunitul: parseInt(serviceData.trafficunitul) || 0,
@@ -426,11 +371,13 @@ function AnimatedGroup({
 interface UserDetailsProps {
   userData: UserData;
   servicePlan: ServicePlan;
-  onPaymentSuccess: (reference: PaystackReference) => void;
+  availablePlans: ServicePlan[];
+  onPaymentSuccess: (reference: any) => void;
   onPaymentClose: () => void;
-  paystackConfig: PaystackConfig | null;
+  paystackConfig: any;
   isProcessingPayment: boolean;
   originalUsername: string;
+  onPlanChangeSuccess: (newPlanId?: string) => void;
 }
 
 // Client-side payment button component
@@ -468,14 +415,9 @@ const PaymentButton: React.FC<{
 
   if (isProcessingPayment) {
     return (
-      <Button 
-        disabled={true}
-        className="h-16 px-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <div className="flex items-center gap-3">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-          <span>Processing...</span>
-        </div>
+      <Button disabled={true} className={componentProps.className}>
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent mr-3"></div>
+        Processing Payment...
       </Button>
     );
   }
@@ -486,11 +428,13 @@ const PaymentButton: React.FC<{
 const UserDetails: React.FC<UserDetailsProps> = ({ 
   userData, 
   servicePlan, 
+  availablePlans,
   onPaymentSuccess, 
   onPaymentClose,
   paystackConfig,
   isProcessingPayment,
-  originalUsername
+  originalUsername,
+  onPlanChangeSuccess
 }) => {
   const accountStatus = getAccountStatus(userData);
   const daysToExpiry = calculateDaysToExpiry(userData.expiry || '');
@@ -549,8 +493,18 @@ const UserDetails: React.FC<UserDetailsProps> = ({
               )}
             </div>
 
-            {/* Payment Button */}
+            {/* Payment and Plan Change Buttons */}
             <div className="pt-4 space-y-3 border-t border-gray-700/30">
+              {/* Show Change Plan button for all account types */}
+              <ChangePlanButton
+                currentPlan={servicePlan}
+                accountStatus={accountStatus.status}
+                availablePlans={availablePlans}
+                username={originalUsername}
+                onPlanChangeSuccess={onPlanChangeSuccess}
+                isLoading={isProcessingPayment}
+              />
+              
               <PaymentButton
                 paystackConfig={paystackConfig}
                 onPaymentSuccess={onPaymentSuccess}
@@ -980,11 +934,57 @@ const RenewalForm: React.FC<RenewalFormProps> = ({ onSubmit, isLoading }) => {
 const ISPLandingPage: React.FC = () => {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [servicePlan, setServicePlan] = useState<ServicePlan | null>(null);
+  const [availablePlans, setAvailablePlans] = useState<ServicePlan[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [originalUsername, setOriginalUsername] = useState<string>('');
   const [showAccountUpdated, setShowAccountUpdated] = useState(false);
+
+  // Fetch available service plans with deduplication
+  const fetchAvailablePlans = async () => {
+    try {
+      console.time('fetch-available-plans');
+      
+      const response = await fetch('/api/radius/service-plans');
+      const data = await response.json();
+      
+      let rawPlans: any[] = [];
+      
+      // Handle new API format: { success: true, plans: [...] }
+      if (data && data.success && Array.isArray(data.plans)) {
+        rawPlans = data.plans;
+      } 
+      // Fallback: Handle old API format: [0, [...]]
+      else if (data && Array.isArray(data) && data.length >= 2 && data[0] === 0) {
+        rawPlans = data[1];
+      } else {
+        console.error('❌ Unexpected API response format:', data);
+        setAvailablePlans([]);
+        return;
+      }
+      
+      // Process and deduplicate plans
+      const processedPlans = rawPlans.map((plan: any) => ({
+        ...plan,
+        code: 0 // Success code for compatibility
+      }));
+      
+      // Deduplicate plans by srvid to prevent duplicate keys
+      const uniquePlans = processedPlans.filter((plan: any, index: number, self: any[]) => 
+        index === self.findIndex((p: any) => String(p.srvid) === String(plan.srvid))
+      );
+      
+      console.log(`📋 Available plans: ${rawPlans.length} raw → ${processedPlans.length} processed → ${uniquePlans.length} unique`);
+      
+      setAvailablePlans(uniquePlans);
+      console.timeEnd('fetch-available-plans');
+      
+    } catch (error) {
+      console.error('❌ Failed to fetch available plans:', error);
+      setAvailablePlans([]);
+    }
+  };
 
   // Paystack configuration
   const generatePaystackConfig = () => {
@@ -1045,8 +1045,11 @@ const ISPLandingPage: React.FC = () => {
     setOriginalUsername(accountName);
     
     try {
-      // Fetch user data
-      const userResult = await getUserData(accountName);
+      // Fetch user data and available plans in parallel
+      const [userResult] = await Promise.all([
+        getUserData(accountName),
+        fetchAvailablePlans()
+      ]);
       
       if (userResult.code === 0 && userResult.srvid) {
         // Fetch service plan details
@@ -1059,11 +1062,128 @@ const ISPLandingPage: React.FC = () => {
           setError(serviceResult.str || 'Failed to fetch service plan details');
         }
       } else {
-        setError(userResult.str || 'User account not found');
+        setError(userResult.str || 'User not found or invalid account');
       }
     } catch (err) {
-      console.error('API Error:', err);
-      setError('An error occurred while fetching account details');
+      console.error('Account lookup error:', err);
+      setError('Failed to fetch account details. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const refreshAccountDataWithRetry = async (username: string, expectedPlanId?: string) => {
+    let retries = 3;
+    
+    // Clear existing data first to prevent rendering conflicts
+    console.log('🧹 Clearing existing data before refresh...');
+    setError(null);
+    
+    while (retries > 0) {
+      try {
+        console.log(`🔄 Attempting to refresh user data for ${username} (Attempt ${4 - retries})...`);
+        
+        // Fetch fresh user data
+        const refreshedUserResult = await getUserData(username);
+        
+        if (refreshedUserResult.code === 0 && refreshedUserResult.srvid) {
+          console.log(`📊 User data retrieved - srvid: ${refreshedUserResult.srvid}`);
+          
+          // Validate plan change if expected plan ID is provided
+          if (expectedPlanId && String(refreshedUserResult.srvid) !== String(expectedPlanId)) {
+            console.warn(`⚠️ Plan ID mismatch - Expected: ${expectedPlanId}, Got: ${refreshedUserResult.srvid}`);
+            retries--;
+            if (retries === 0) {
+              throw new Error(`Plan change not reflected in user data. Expected plan ${expectedPlanId}, but user still shows plan ${refreshedUserResult.srvid}`);
+            }
+            await new Promise(resolve => setTimeout(resolve, 1500)); // Longer wait for plan changes
+            continue;
+          }
+          
+          // Update user data
+          setUserData(refreshedUserResult);
+          console.log('✅ User data updated successfully');
+          
+          // Fetch and update service plan details
+          try {
+            console.log(`🔄 Fetching service plan details for srvid: ${refreshedUserResult.srvid}`);
+            const refreshedServiceResult = await getServicePlan(refreshedUserResult.srvid);
+            
+            if (refreshedServiceResult.code === 0) {
+              setServicePlan(refreshedServiceResult);
+              console.log(`✅ Service plan updated to: ${refreshedServiceResult.srvname}`);
+            } else {
+              console.error('❌ Failed to fetch updated service plan:', refreshedServiceResult.str);
+              // Don't fail the whole process if service plan fetch fails
+            }
+          } catch (servicePlanError) {
+            console.error('❌ Error fetching service plan:', servicePlanError);
+            // Don't fail the whole process if service plan fetch fails
+          }
+          
+          // Refresh available plans as well with defensive clearing
+          try {
+            console.log('🔄 Refreshing available plans...');
+            setAvailablePlans([]); // Clear first to prevent duplicate key issues
+            await fetchAvailablePlans();
+            console.log('✅ Available plans refreshed');
+          } catch (plansError) {
+            console.error('❌ Error refreshing available plans:', plansError);
+            // Don't fail the whole process if plans refresh fails
+          }
+          
+          break; // Exit retry loop on success
+          
+        } else {
+          console.warn(`❌ Failed to refresh user data (Attempt ${4 - retries}): ${refreshedUserResult.str}`);
+          retries--;
+          if (retries === 0) {
+            throw new Error(`Failed to refresh user data after multiple retries: ${refreshedUserResult.str}`);
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
+      } catch (refreshError) {
+        console.error(`❌ Error refreshing user data (Attempt ${4 - retries}):`, refreshError);
+        retries--;
+        if (retries === 0) {
+          throw refreshError;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+  };
+
+  const handlePlanChangeSuccess = async (newPlanId?: string) => {
+    console.log('🔄 Plan change successful! Starting data refresh...');
+    console.log('📋 Expected new plan ID:', newPlanId);
+    
+    // Clear any existing error state
+    setError(null);
+    
+    if (!originalUsername) {
+      console.error('❌ No username available for refresh');
+      return;
+    }
+
+    try {
+      // Add a delay to ensure DMA Radius Manager has processed the change
+      console.log('⏳ Waiting for DMA Radius Manager to process changes...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Show loading state during refresh
+      setIsLoading(true);
+      
+      // Refresh account data with retry logic and plan validation
+      await refreshAccountDataWithRetry(originalUsername, newPlanId);
+      
+      // Show success indicator
+      setShowAccountUpdated(true);
+      setTimeout(() => setShowAccountUpdated(false), 5000);
+      
+    } catch (error) {
+      console.error('❌ Failed to refresh account data after plan change:', error);
+      setError('Plan changed successfully, but failed to refresh display. Please search again to see updated information.');
     } finally {
       setIsLoading(false);
     }
@@ -1219,13 +1339,28 @@ const ISPLandingPage: React.FC = () => {
                     <div className="space-y-6">
                       <div className="flex justify-between items-center">
                         <h2 className="text-2xl font-bold text-white">Account Information</h2>
-                        <Button 
-                          onClick={resetForm}
-                          className="bg-gray-700/80 hover:bg-gray-600/80 text-gray-100 hover:text-white border border-gray-500/50 hover:border-gray-400 px-6 py-2 rounded-lg font-semibold text-sm shadow-lg backdrop-blur-sm transition-all duration-200 transform hover:scale-105 hover:shadow-xl"
-                        >
-                          <Search className="mr-2 h-4 w-4" />
-                          Search Another Account
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button 
+                            onClick={() => refreshAccountDataWithRetry(originalUsername)}
+                            disabled={isLoading}
+                            className="bg-purple-600/80 hover:bg-purple-700/80 text-gray-100 hover:text-white border border-purple-500/50 hover:border-purple-400 px-4 py-2 rounded-lg font-semibold text-sm shadow-lg backdrop-blur-sm transition-all duration-200 transform hover:scale-105 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isLoading ? (
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2"></div>
+                            ) : (
+                              <RefreshCw className="mr-2 h-4 w-4" />
+                            )}
+                            Refresh
+                          </Button>
+                          <Button 
+                            onClick={resetForm}
+                            disabled={isLoading}
+                            className="bg-gray-700/80 hover:bg-gray-600/80 text-gray-100 hover:text-white border border-gray-500/50 hover:border-gray-400 px-4 py-2 rounded-lg font-semibold text-sm shadow-lg backdrop-blur-sm transition-all duration-200 transform hover:scale-105 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Search className="mr-2 h-4 w-4" />
+                            Search Another Account
+                          </Button>
+                        </div>
                       </div>
                       
                       {/* Account Updated Success Indicator */}
@@ -1239,11 +1374,13 @@ const ISPLandingPage: React.FC = () => {
                       <UserDetails 
                         userData={userData} 
                         servicePlan={servicePlan} 
+                        availablePlans={availablePlans}
                         onPaymentSuccess={handlePaymentSuccess}
                         onPaymentClose={handlePaymentClose}
                         paystackConfig={generatePaystackConfig()}
                         isProcessingPayment={isProcessingPayment}
                         originalUsername={originalUsername}
+                        onPlanChangeSuccess={handlePlanChangeSuccess}
                       />
                     </div>
                   ) : (
