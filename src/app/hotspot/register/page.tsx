@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import dynamic from 'next/dynamic';
 import { 
   Phone, 
   User, 
@@ -24,44 +23,44 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSearchParams } from 'next/navigation';
-
-// Dynamically import Paystack to avoid SSR issues
-const PaystackButton = dynamic(
-  () => import('react-paystack').then(mod => mod.PaystackButton),
-  { ssr: false }
-);
 import { generateHotspotPassword } from '@/lib/password-utils';
 import { generateWelcomeSMS, sendWelcomeSMS } from '@/lib/sms-utils';
 
-// Paystack types - compatible with react-paystack
+// Paystack types
 interface PaystackResponse {
   reference: string;
   status: string;
   message: string;
-  trans: string;
-  transaction: string;
-  trxref: string;
 }
 
-interface PaystackConfig {
-  reference: string;
-  email: string;
-  amount: number;
-  publicKey: string;
-  text: string;
-  onSuccess: (reference: PaystackResponse) => void;
-  onClose: () => void;
-  metadata?: {
-    custom_fields?: Array<{
-      display_name: string;
-      variable_name: string;
-      value: string;
-    }>;
-    [key: string]: unknown;
-  };
+interface PaystackHandler {
+  openIframe(): void;
 }
 
+interface PaystackPop {
+  setup(config: {
+    key: string;
+    email: string;
+    amount: number;
+    reference: string;
+    currency: string;
+    metadata?: {
+      custom_fields?: Array<{
+        display_name: string;
+        variable_name: string;
+        value: string;
+      }>;
+    };
+    callback: (response: PaystackResponse) => void;
+    onClose: () => void;
+  }): PaystackHandler;
+}
 
+declare global {
+  interface Window {
+    PaystackPop: PaystackPop;
+  }
+}
 
 interface ServicePlan {
   srvid: string;
@@ -139,7 +138,6 @@ function HotspotRegisterContent() {
   } | null>(null);
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'selection' | 'payment' | 'verification' | 'completed'>('selection');
-
   const [registrationData, setRegistrationData] = useState<RegistrationData>({
     phone: '',
     firstName: '',
@@ -153,7 +151,21 @@ function HotspotRegisterContent() {
     locationId: searchParams.get('location') || ''
   });
 
+  // Load Paystack inline script for popup modal
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://js.paystack.co/v1/inline.js';
+    script.async = true;
+    document.body.appendChild(script);
 
+    return () => {
+      // Cleanup script on unmount
+      const existingScript = document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]');
+      if (existingScript) {
+        document.body.removeChild(existingScript);
+      }
+    };
+  }, []);
 
   // Check for payment reference in URL when component mounts
   useEffect(() => {
@@ -481,108 +493,8 @@ function HotspotRegisterContent() {
     }
   };
 
-  // Generate PayStack configuration for react-paystack
-  const generatePaystackConfig = (): PaystackConfig | null => {
-    if (!registrationData.firstName || !registrationData.lastName || !registrationData.email) {
-      return null;
-    }
-
-    // Validate PayStack public key
-    const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
-    if (!publicKey || publicKey.length < 10) {
-      console.error('PayStack public key not configured properly');
-      return null;
-    }
-
-    const totalAmount = registrationData.totalAmount || 0;
-    if (totalAmount <= 0) return null;
-
-    return {
-      reference: `ACC_${Date.now()}_${registrationData.firstName}_${registrationData.lastName}`.replace(/\s+/g, '_'),
-      email: registrationData.email,
-      amount: Math.round(totalAmount * 100), // Convert to kobo
-      publicKey: publicKey,
-      text: `Pay ₦${totalAmount.toLocaleString()} & Create Account`,
-      onSuccess: handlePaymentSuccess,
-      onClose: handlePaymentClose,
-      metadata: {
-        custom_fields: [
-          {
-            display_name: "Purpose",
-            variable_name: "purpose",
-            value: registrationData.servicePlanPrice ? "Combined Account Creation & Service Plan" : "Account Creation"
-          },
-          {
-            display_name: "Customer Name",
-            variable_name: "customer_name",
-            value: `${registrationData.firstName} ${registrationData.lastName}`
-          },
-          {
-            display_name: "Phone",
-            variable_name: "phone",
-            value: registrationData.phone
-          },
-          {
-            display_name: "Location ID",
-            variable_name: "location_id",
-            value: registrationData.locationId
-          },
-          {
-            display_name: "Service Plan ID",
-            variable_name: "srvid",
-            value: registrationData.serviceId
-          }
-        ]
-      }
-    };
-  };
-
-  // PayStack payment handlers
-  const handlePaymentSuccess = (response: PaystackResponse) => {
-    console.log('Payment successful:', response);
-    setRegistrationData(prev => ({ ...prev, paymentReference: response.reference }));
-    setPaymentStep('completed');
-    
-    // Since webhook handles user creation, proceed directly to confirmation
-    console.log('Payment completed - webhook will handle user creation');
-    
-    // Send SMS and proceed to confirmation step
-    setTimeout(async () => {
-      try {
-        const welcomeMessage = generateWelcomeSMS({
-          firstName: registrationData.firstName,
-          phone: registrationData.phone,
-          password: registrationData.password,
-          locationName: locationDetails?.display_name
-        });
-        
-        const smsResponse = await sendWelcomeSMS(registrationData.phone, welcomeMessage);
-        const smsData = await smsResponse.json();
-        
-        if (!smsData.success) {
-          console.error('SMS sending failed:', smsData.error);
-          setError('Account created successfully, but SMS notification failed. Please save your credentials.');
-        } else {
-          console.log('SMS sent successfully');
-        }
-      } catch (smsError) {
-        console.error('SMS error:', smsError);
-        setError('Account created successfully, but SMS notification failed. Please save your credentials.');
-      }
-      
-      setCurrentStep(4);
-      sessionStorage.removeItem('registrationFormData');
-      setIsLoading(false);
-    }, 2000); // Give webhook some time to process
-  };
-
-  const handlePaymentClose = () => {
-    console.log('Payment popup closed');
-    setIsPaymentProcessing(false);
-  };
-
-  // Simplified payment preparation for react-paystack
-  const preparePayment = async () => {
+  // NEW: Initiate popup payment instead of redirect
+  const initiatePayment = async () => {
     if (!registrationData.selectedServicePlan || !pricingConfig?.enabled) {
       setError('Invalid payment configuration');
       return;
@@ -591,55 +503,6 @@ function HotspotRegisterContent() {
     try {
       setIsPaymentProcessing(true);
       setError(null);
-
-      // Save form data to sessionStorage for reliability
-      sessionStorage.setItem('registrationFormData', JSON.stringify({
-        phone: registrationData.phone,
-        firstName: registrationData.firstName,
-        lastName: registrationData.lastName,
-        email: registrationData.email,
-        address: registrationData.address,
-        city: registrationData.city,
-        state: registrationData.state,
-        serviceId: registrationData.serviceId,
-        password: registrationData.password,
-        locationId: registrationData.locationId,
-        selectedServicePlan: registrationData.selectedServicePlan,
-        servicePlanPrice: registrationData.servicePlanPrice,
-        accountCreationFee: registrationData.accountCreationFee,
-        totalAmount: registrationData.totalAmount
-      }));
-
-      // Set payment step to trigger the PayStack button
-      setPaymentStep('payment');
-    } catch (error) {
-      console.error('Payment preparation error:', error);
-      setError('Failed to prepare payment. Please try again.');
-    } finally {
-      setIsPaymentProcessing(false);
-    }
-  };
-
-  // REMOVED: Old initiatePayment function - now using react-paystack
-  /* const initiatePayment = async () => {
-    if (!registrationData.selectedServicePlan || !pricingConfig?.enabled) {
-      setError('Invalid payment configuration');
-      return;
-    }
-
-    try {
-      setIsPaymentProcessing(true);
-      setError(null);
-
-      // Wait for PayStack to be fully loaded before proceeding
-      try {
-        await waitForPaystack();
-      } catch (error) {
-        console.error('PayStack loading timeout:', error);
-        setError('Payment system is loading. Please wait a moment and try again.');
-        setIsPaymentProcessing(false);
-        return;
-      }
 
       // Save form data to sessionStorage for reliability
       sessionStorage.setItem('registrationFormData', JSON.stringify({
@@ -683,8 +546,7 @@ function HotspotRegisterContent() {
         // Initialize Paystack popup instead of redirect
         const paystack = window.PaystackPop;
         if (!paystack) {
-          setError('Payment system not properly initialized. Please refresh the page and try again.');
-          setIsPaymentProcessing(false);
+          setError('Payment system not loaded. Please refresh and try again.');
           return;
         }
 
@@ -800,17 +662,8 @@ function HotspotRegisterContent() {
 
         console.log('Paystack popup metadata:', metadata);
 
-        // Validate PayStack public key
-        const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
-        if (!publicKey || publicKey.length < 10) {
-          console.error('PayStack public key not configured properly');
-          setError('Payment system configuration error. Please contact support.');
-          setIsPaymentProcessing(false);
-          return;
-        }
-
         const handler = paystack.setup({
-          key: publicKey,
+          key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
           email: registrationData.email,
           amount: Math.round(data.data.amount * 100), // Convert Naira to kobo
           reference: data.data.reference,
@@ -862,28 +715,15 @@ function HotspotRegisterContent() {
 
         handler.openIframe();
       } else {
-        console.error('Payment initiation failed:', data);
-        setError(data.error || 'Failed to initialize payment. Please try again.');
+        setError(data.error || 'Failed to initiate payment');
       }
     } catch (error) {
       console.error('Payment initiation error:', error);
-      
-      // Provide more specific error messages based on the error type
-      if (error instanceof Error) {
-        if (error.message.includes('PayStack not loaded')) {
-          setError('Payment system is loading. Please wait a moment and try again.');
-        } else if (error.message.includes('fetch')) {
-          setError('Network error. Please check your internet connection and try again.');
-        } else {
-          setError(`Payment error: ${error.message}`);
-        }
-      } else {
-        setError('Payment system error. Please check your internet connection and try again.');
-      }
+      setError('Error initiating payment');
     } finally {
       setIsPaymentProcessing(false);
     }
-  }; */
+  };
 
   const handleNext = () => {
     setError(null);
@@ -939,8 +779,9 @@ function HotspotRegisterContent() {
       
       if (requiresPayment) {
         // Initiate payment process for paid plans
-        console.log('Preparing payment process...');
-        preparePayment();
+        console.log('Initiating payment process...');
+        setPaymentStep('payment');
+        initiatePayment();
       } else {
         // Proceed with free registration for free plans or when pricing is disabled
         console.log('Proceeding with free registration...');
@@ -1459,74 +1300,34 @@ function HotspotRegisterContent() {
                     Back
                   </Button>
                   
-{currentStep === 3 && paymentStep === 'payment' ? (
-                    // Show PayStack button when payment is required
-                    (() => {
-                      const paystackConfig = generatePaystackConfig();
-                      if (!paystackConfig) {
-                        return (
-                          <Button 
-                            disabled={true}
-                            className="flex-1 h-12 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-xl text-lg disabled:opacity-75 disabled:cursor-not-allowed"
-                          >
-                            Payment System Unavailable
-                          </Button>
-                        );
-                      }
-
-                      if (isPaymentProcessing) {
-                        return (
-                          <Button 
-                            disabled={true}
-                            className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl text-lg disabled:opacity-75"
-                          >
-                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                            Processing Payment...
-                          </Button>
-                        );
-                      }
-
-                      return (
-                        <PaystackButton 
-                          {...paystackConfig}
-                          className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25 text-lg"
-                        />
-                      );
-                    })()
-                  ) : (
-                    // Show regular button for other cases
-                    <Button
-                      onClick={handleNext}
-                      disabled={isLoading || isPaymentProcessing}
-                      className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 transition-all duration-200"
-                    >
-                      {isLoading || isPaymentProcessing ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          {isPaymentProcessing ? 'Processing Payment...' : 'Loading...'}
-                        </>
-                      ) : (
-                        <>
-                          {currentStep === 3 ? (
-                            (() => {
-                              const selectedPlan = servicePlans.find(plan => plan.srvid === registrationData.serviceId);
-                              const planPrice = selectedPlan ? 
-                                parseFloat(selectedPlan.unitprice) + parseFloat(selectedPlan.unitpriceadd || '0') + 
-                                parseFloat(selectedPlan.unitpricetax || '0') + parseFloat(selectedPlan.unitpriceaddtax || '0') : 0;
-                              const requiresPayment = pricingConfig?.enabled && planPrice > 0;
-                              
-                              if (requiresPayment && paymentStep === 'selection') {
-                                return `Pay ₦${registrationData.totalAmount?.toLocaleString() || '0'} & Create Account`;
-                              } else {
-                                return 'Create Account';
-                              }
-                            })()
-                          ) : 'Continue'}
-                          {currentStep < 3 && <ArrowRight className="h-4 w-4 ml-2" />}
-                        </>
-                      )}
-                    </Button>
-                  )}
+                  <Button
+                    onClick={handleNext}
+                    disabled={isLoading || isPaymentProcessing}
+                    className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 transition-all duration-200"
+                  >
+                    {isLoading || isPaymentProcessing ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <>
+                        {currentStep === 3 ? (
+                          (() => {
+                            const selectedPlan = servicePlans.find(plan => plan.srvid === registrationData.serviceId);
+                            const planPrice = selectedPlan ? 
+                              parseFloat(selectedPlan.unitprice) + parseFloat(selectedPlan.unitpriceadd || '0') + 
+                              parseFloat(selectedPlan.unitpricetax || '0') + parseFloat(selectedPlan.unitpriceaddtax || '0') : 0;
+                            const requiresPayment = pricingConfig?.enabled && planPrice > 0;
+                            
+                            if (requiresPayment && paymentStep === 'selection') {
+                              return `Pay ₦${registrationData.totalAmount?.toLocaleString() || '0'} & Create Account`;
+                            } else {
+                              return 'Create Account';
+                            }
+                          })()
+                        ) : 'Continue'}
+                        {currentStep < 3 && <ArrowRight className="h-4 w-4 ml-2" />}
+                      </>
+                    )}
+                  </Button>
                 </div>
               )}
 

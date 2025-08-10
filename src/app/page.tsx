@@ -400,24 +400,13 @@ const PaymentButton: React.FC<{
     setIsMounted(true);
   }, []);
 
-  if (!isMounted) {
+  if (!isMounted || !paystackConfig) {
     return (
       <Button 
         disabled={true}
         className="h-16 px-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <span>Loading Payment...</span>
-      </Button>
-    );
-  }
-
-  if (!paystackConfig) {
-    return (
-      <Button 
-        disabled={true}
-        className="h-16 px-12 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-xl text-lg disabled:opacity-75 disabled:cursor-not-allowed"
-      >
-        <span>Payment System Unavailable</span>
       </Button>
     );
   }
@@ -1007,18 +996,11 @@ const ISPLandingPage: React.FC = () => {
   const generatePaystackConfig = () => {
     if (!userData || !servicePlan) return null;
 
-    // Validate PayStack public key
-    const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
-    if (!publicKey || publicKey.length < 10) {
-      console.error('PayStack public key not configured properly');
-      return null;
-    }
-
     return {
       reference: `PHS_${Date.now()}_${userData.firstname}_${userData.lastname}`.replace(/\s+/g, '_'),
       email: userData.email || `${userData.firstname?.toLowerCase()}.${userData.lastname?.toLowerCase()}@phsweb.com`,
       amount: Math.round((servicePlan.totalPrice || 0) * 100), // Convert to kobo
-      publicKey: publicKey,
+      publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || 'pk_test_your_public_key_here',
       metadata: {
         // Direct metadata properties for easier access in webhook
         username: originalUsername,
