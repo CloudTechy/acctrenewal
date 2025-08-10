@@ -10,10 +10,13 @@ export function generateWelcomeSMS(data: WelcomeSMSData): string {
   
   const location = locationName ? ` for ${locationName}` : '';
   
+  // Use environment variable for the domain, with fallback to sabiwifi.com
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sabiwifi.com';
+  
   const message = `Welcome ${firstName}! Your WiFi account${location} is ready. 
 Login: ${phone}
 PIN: ${password}
-connect to hotspot: http://hotspot.phsweb.net/login
+Connect to WiFi and visit: ${baseUrl}
 Add credit: https://phsweb.app
 
 Enjoy fast internet!`;

@@ -1258,7 +1258,13 @@ function HotspotRegisterContent() {
 
                     <div className="flex gap-4">
                       <Button
-                        onClick={() => window.open('http://hotspot.phsweb.net/login', '_blank')}
+                        onClick={() => {
+                          // Get the current location from URL params or default to the registration location
+                          const urlParams = new URLSearchParams(window.location.search);
+                          const location = urlParams.get('location') || 'awka';
+                          const hotspotUrl = `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/hotspot/${location}`;
+                          window.open(hotspotUrl, '_blank');
+                        }}
                         className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 transition-all duration-200"
                       >
                         <Wifi className="h-5 w-5 mr-2" />
@@ -1329,7 +1335,13 @@ function HotspotRegisterContent() {
               <div className="text-center pt-4 border-t border-gray-700/50">
                 <Button
                   variant="ghost"
-                  onClick={() => window.open('http://hotspot.phsweb.net/login', '_blank')}
+                  onClick={() => {
+                    // Get the current location from URL params or default location
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const location = urlParams.get('location') || 'awka';
+                    const hotspotUrl = `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/hotspot/${location}`;
+                    window.open(hotspotUrl, '_blank');
+                  }}
                   className="text-gray-400 hover:text-blue-400 hover:bg-gray-700/50"
                 >
                   Already have an account? Go back to login
