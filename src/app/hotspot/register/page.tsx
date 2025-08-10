@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import dynamic from 'next/dynamic';
 import { 
   Phone, 
   User, 
@@ -23,44 +24,44 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSearchParams } from 'next/navigation';
+
+// Dynamically import Paystack to avoid SSR issues
+const PaystackButton = dynamic(
+  () => import('react-paystack').then(mod => mod.PaystackButton),
+  { ssr: false }
+);
 import { generateHotspotPassword } from '@/lib/password-utils';
 import { generateWelcomeSMS, sendWelcomeSMS } from '@/lib/sms-utils';
 
-// Paystack types
+// Paystack types - compatible with react-paystack
 interface PaystackResponse {
   reference: string;
   status: string;
   message: string;
+  trans: string;
+  transaction: string;
+  trxref: string;
 }
 
-interface PaystackHandler {
-  openIframe(): void;
+interface PaystackConfig {
+  reference: string;
+  email: string;
+  amount: number;
+  publicKey: string;
+  text: string;
+  onSuccess: (reference: PaystackResponse) => void;
+  onClose: () => void;
+  metadata?: {
+    custom_fields?: Array<{
+      display_name: string;
+      variable_name: string;
+      value: string;
+    }>;
+    [key: string]: unknown;
+  };
 }
 
-interface PaystackPop {
-  setup(config: {
-    key: string;
-    email: string;
-    amount: number;
-    reference: string;
-    currency: string;
-    metadata?: {
-      custom_fields?: Array<{
-        display_name: string;
-        variable_name: string;
-        value: string;
-      }>;
-    };
-    callback: (response: PaystackResponse) => void;
-    onClose: () => void;
-  }): PaystackHandler;
-}
 
-declare global {
-  interface Window {
-    PaystackPop: PaystackPop;
-  }
-}
 
 interface ServicePlan {
   srvid: string;
@@ -138,7 +139,7 @@ function HotspotRegisterContent() {
   } | null>(null);
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'selection' | 'payment' | 'verification' | 'completed'>('selection');
-  const [isPaystackLoading, setIsPaystackLoading] = useState(true);
+
   const [registrationData, setRegistrationData] = useState<RegistrationData>({
     phone: '',
     firstName: '',
@@ -152,59 +153,7 @@ function HotspotRegisterContent() {
     locationId: searchParams.get('location') || ''
   });
 
-  // Load Paystack inline script for popup modal with robust error handling
-  useEffect(() => {
-    const loadPaystackScript = () => {
-      return new Promise<void>((resolve, reject) => {
-        // Check if script is already loaded
-        if (window.PaystackPop) {
-          resolve();
-          return;
-        }
 
-        // Check if script is already in DOM
-        const existingScript = document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]');
-        if (existingScript) {
-          existingScript.addEventListener('load', () => resolve());
-          existingScript.addEventListener('error', () => reject(new Error('Script failed to load')));
-          return;
-        }
-
-        // Create and load script
-        const script = document.createElement('script');
-        script.src = 'https://js.paystack.co/v1/inline.js';
-        script.async = true;
-        
-        script.onload = () => {
-          console.log('PayStack script loaded successfully');
-          setIsPaystackLoading(false);
-          resolve();
-        };
-        
-        script.onerror = () => {
-          console.error('Failed to load PayStack script');
-          reject(new Error('PayStack script failed to load'));
-        };
-
-        document.head.appendChild(script); // Use head instead of body for better loading
-      });
-    };
-
-    // Load script and handle errors
-    loadPaystackScript().catch((error) => {
-      console.error('PayStack script loading error:', error);
-      setIsPaystackLoading(false);
-      setError('Payment system unavailable. Please check your internet connection and try again.');
-    });
-
-    return () => {
-      // Cleanup script on unmount
-      const existingScript = document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]');
-      if (existingScript) {
-        document.head.removeChild(existingScript);
-      }
-    };
-  }, []);
 
   // Check for payment reference in URL when component mounts
   useEffect(() => {
@@ -532,31 +481,147 @@ function HotspotRegisterContent() {
     }
   };
 
-  // Utility function to wait for PayStack to be loaded
-  const waitForPaystack = () => {
-    return new Promise<void>((resolve, reject) => {
-      if (window.PaystackPop) {
-        resolve();
-        return;
-      }
+  // Generate PayStack configuration for react-paystack
+  const generatePaystackConfig = (): PaystackConfig | null => {
+    if (!registrationData.firstName || !registrationData.lastName || !registrationData.email) {
+      return null;
+    }
 
-      let attempts = 0;
-      const maxAttempts = 50; // 5 seconds max wait time
-      const checkInterval = setInterval(() => {
-        attempts++;
-        if (window.PaystackPop) {
-          clearInterval(checkInterval);
-          resolve();
-        } else if (attempts >= maxAttempts) {
-          clearInterval(checkInterval);
-          reject(new Error('PayStack not loaded after timeout'));
-        }
-      }, 100);
-    });
+    // Validate PayStack public key
+    const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
+    if (!publicKey || publicKey.length < 10) {
+      console.error('PayStack public key not configured properly');
+      return null;
+    }
+
+    const totalAmount = registrationData.totalAmount || 0;
+    if (totalAmount <= 0) return null;
+
+    return {
+      reference: `ACC_${Date.now()}_${registrationData.firstName}_${registrationData.lastName}`.replace(/\s+/g, '_'),
+      email: registrationData.email,
+      amount: Math.round(totalAmount * 100), // Convert to kobo
+      publicKey: publicKey,
+      text: `Pay ₦${totalAmount.toLocaleString()} & Create Account`,
+      onSuccess: handlePaymentSuccess,
+      onClose: handlePaymentClose,
+      metadata: {
+        custom_fields: [
+          {
+            display_name: "Purpose",
+            variable_name: "purpose",
+            value: registrationData.servicePlanPrice ? "Combined Account Creation & Service Plan" : "Account Creation"
+          },
+          {
+            display_name: "Customer Name",
+            variable_name: "customer_name",
+            value: `${registrationData.firstName} ${registrationData.lastName}`
+          },
+          {
+            display_name: "Phone",
+            variable_name: "phone",
+            value: registrationData.phone
+          },
+          {
+            display_name: "Location ID",
+            variable_name: "location_id",
+            value: registrationData.locationId
+          },
+          {
+            display_name: "Service Plan ID",
+            variable_name: "srvid",
+            value: registrationData.serviceId
+          }
+        ]
+      }
+    };
   };
 
-  // NEW: Initiate popup payment instead of redirect
-  const initiatePayment = async () => {
+  // PayStack payment handlers
+  const handlePaymentSuccess = (response: PaystackResponse) => {
+    console.log('Payment successful:', response);
+    setRegistrationData(prev => ({ ...prev, paymentReference: response.reference }));
+    setPaymentStep('completed');
+    
+    // Since webhook handles user creation, proceed directly to confirmation
+    console.log('Payment completed - webhook will handle user creation');
+    
+    // Send SMS and proceed to confirmation step
+    setTimeout(async () => {
+      try {
+        const welcomeMessage = generateWelcomeSMS({
+          firstName: registrationData.firstName,
+          phone: registrationData.phone,
+          password: registrationData.password,
+          locationName: locationDetails?.display_name
+        });
+        
+        const smsResponse = await sendWelcomeSMS(registrationData.phone, welcomeMessage);
+        const smsData = await smsResponse.json();
+        
+        if (!smsData.success) {
+          console.error('SMS sending failed:', smsData.error);
+          setError('Account created successfully, but SMS notification failed. Please save your credentials.');
+        } else {
+          console.log('SMS sent successfully');
+        }
+      } catch (smsError) {
+        console.error('SMS error:', smsError);
+        setError('Account created successfully, but SMS notification failed. Please save your credentials.');
+      }
+      
+      setCurrentStep(4);
+      sessionStorage.removeItem('registrationFormData');
+      setIsLoading(false);
+    }, 2000); // Give webhook some time to process
+  };
+
+  const handlePaymentClose = () => {
+    console.log('Payment popup closed');
+    setIsPaymentProcessing(false);
+  };
+
+  // Simplified payment preparation for react-paystack
+  const preparePayment = async () => {
+    if (!registrationData.selectedServicePlan || !pricingConfig?.enabled) {
+      setError('Invalid payment configuration');
+      return;
+    }
+
+    try {
+      setIsPaymentProcessing(true);
+      setError(null);
+
+      // Save form data to sessionStorage for reliability
+      sessionStorage.setItem('registrationFormData', JSON.stringify({
+        phone: registrationData.phone,
+        firstName: registrationData.firstName,
+        lastName: registrationData.lastName,
+        email: registrationData.email,
+        address: registrationData.address,
+        city: registrationData.city,
+        state: registrationData.state,
+        serviceId: registrationData.serviceId,
+        password: registrationData.password,
+        locationId: registrationData.locationId,
+        selectedServicePlan: registrationData.selectedServicePlan,
+        servicePlanPrice: registrationData.servicePlanPrice,
+        accountCreationFee: registrationData.accountCreationFee,
+        totalAmount: registrationData.totalAmount
+      }));
+
+      // Set payment step to trigger the PayStack button
+      setPaymentStep('payment');
+    } catch (error) {
+      console.error('Payment preparation error:', error);
+      setError('Failed to prepare payment. Please try again.');
+    } finally {
+      setIsPaymentProcessing(false);
+    }
+  };
+
+  // REMOVED: Old initiatePayment function - now using react-paystack
+  /* const initiatePayment = async () => {
     if (!registrationData.selectedServicePlan || !pricingConfig?.enabled) {
       setError('Invalid payment configuration');
       return;
@@ -818,7 +883,7 @@ function HotspotRegisterContent() {
     } finally {
       setIsPaymentProcessing(false);
     }
-  };
+  }; */
 
   const handleNext = () => {
     setError(null);
@@ -874,9 +939,8 @@ function HotspotRegisterContent() {
       
       if (requiresPayment) {
         // Initiate payment process for paid plans
-        console.log('Initiating payment process...');
-        setPaymentStep('payment');
-        initiatePayment();
+        console.log('Preparing payment process...');
+        preparePayment();
       } else {
         // Proceed with free registration for free plans or when pricing is disabled
         console.log('Proceeding with free registration...');
@@ -1395,42 +1459,74 @@ function HotspotRegisterContent() {
                     Back
                   </Button>
                   
-                  <Button
-                    onClick={handleNext}
-                    disabled={isLoading || isPaymentProcessing || (currentStep === 3 && isPaystackLoading)}
-                    className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 transition-all duration-200"
-                  >
-                    {isLoading || isPaymentProcessing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        {isPaymentProcessing ? 'Processing Payment...' : 'Loading...'}
-                      </>
-                    ) : currentStep === 3 && isPaystackLoading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        Loading Payment System...
-                      </>
-                    ) : (
-                      <>
-                        {currentStep === 3 ? (
-                          (() => {
-                            const selectedPlan = servicePlans.find(plan => plan.srvid === registrationData.serviceId);
-                            const planPrice = selectedPlan ? 
-                              parseFloat(selectedPlan.unitprice) + parseFloat(selectedPlan.unitpriceadd || '0') + 
-                              parseFloat(selectedPlan.unitpricetax || '0') + parseFloat(selectedPlan.unitpriceaddtax || '0') : 0;
-                            const requiresPayment = pricingConfig?.enabled && planPrice > 0;
-                            
-                            if (requiresPayment && paymentStep === 'selection') {
-                              return `Pay ₦${registrationData.totalAmount?.toLocaleString() || '0'} & Create Account`;
-                            } else {
-                              return 'Create Account';
-                            }
-                          })()
-                        ) : 'Continue'}
-                        {currentStep < 3 && <ArrowRight className="h-4 w-4 ml-2" />}
-                      </>
-                    )}
-                  </Button>
+{currentStep === 3 && paymentStep === 'payment' ? (
+                    // Show PayStack button when payment is required
+                    (() => {
+                      const paystackConfig = generatePaystackConfig();
+                      if (!paystackConfig) {
+                        return (
+                          <Button 
+                            disabled={true}
+                            className="flex-1 h-12 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-xl text-lg disabled:opacity-75 disabled:cursor-not-allowed"
+                          >
+                            Payment System Unavailable
+                          </Button>
+                        );
+                      }
+
+                      if (isPaymentProcessing) {
+                        return (
+                          <Button 
+                            disabled={true}
+                            className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl text-lg disabled:opacity-75"
+                          >
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            Processing Payment...
+                          </Button>
+                        );
+                      }
+
+                      return (
+                        <PaystackButton 
+                          {...paystackConfig}
+                          className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25 text-lg"
+                        />
+                      );
+                    })()
+                  ) : (
+                    // Show regular button for other cases
+                    <Button
+                      onClick={handleNext}
+                      disabled={isLoading || isPaymentProcessing}
+                      className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 transition-all duration-200"
+                    >
+                      {isLoading || isPaymentProcessing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          {isPaymentProcessing ? 'Processing Payment...' : 'Loading...'}
+                        </>
+                      ) : (
+                        <>
+                          {currentStep === 3 ? (
+                            (() => {
+                              const selectedPlan = servicePlans.find(plan => plan.srvid === registrationData.serviceId);
+                              const planPrice = selectedPlan ? 
+                                parseFloat(selectedPlan.unitprice) + parseFloat(selectedPlan.unitpriceadd || '0') + 
+                                parseFloat(selectedPlan.unitpricetax || '0') + parseFloat(selectedPlan.unitpriceaddtax || '0') : 0;
+                              const requiresPayment = pricingConfig?.enabled && planPrice > 0;
+                              
+                              if (requiresPayment && paymentStep === 'selection') {
+                                return `Pay ₦${registrationData.totalAmount?.toLocaleString() || '0'} & Create Account`;
+                              } else {
+                                return 'Create Account';
+                              }
+                            })()
+                          ) : 'Continue'}
+                          {currentStep < 3 && <ArrowRight className="h-4 w-4 ml-2" />}
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
               )}
 
