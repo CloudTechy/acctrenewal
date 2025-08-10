@@ -138,6 +138,7 @@ function HotspotRegisterContent() {
   } | null>(null);
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'selection' | 'payment' | 'verification' | 'completed'>('selection');
+  const [isPaystackLoading, setIsPaystackLoading] = useState(true);
   const [registrationData, setRegistrationData] = useState<RegistrationData>({
     phone: '',
     firstName: '',
@@ -151,18 +152,56 @@ function HotspotRegisterContent() {
     locationId: searchParams.get('location') || ''
   });
 
-  // Load Paystack inline script for popup modal
+  // Load Paystack inline script for popup modal with robust error handling
   useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://js.paystack.co/v1/inline.js';
-    script.async = true;
-    document.body.appendChild(script);
+    const loadPaystackScript = () => {
+      return new Promise<void>((resolve, reject) => {
+        // Check if script is already loaded
+        if (window.PaystackPop) {
+          resolve();
+          return;
+        }
+
+        // Check if script is already in DOM
+        const existingScript = document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]');
+        if (existingScript) {
+          existingScript.addEventListener('load', () => resolve());
+          existingScript.addEventListener('error', () => reject(new Error('Script failed to load')));
+          return;
+        }
+
+        // Create and load script
+        const script = document.createElement('script');
+        script.src = 'https://js.paystack.co/v1/inline.js';
+        script.async = true;
+        
+        script.onload = () => {
+          console.log('PayStack script loaded successfully');
+          setIsPaystackLoading(false);
+          resolve();
+        };
+        
+        script.onerror = () => {
+          console.error('Failed to load PayStack script');
+          reject(new Error('PayStack script failed to load'));
+        };
+
+        document.head.appendChild(script); // Use head instead of body for better loading
+      });
+    };
+
+    // Load script and handle errors
+    loadPaystackScript().catch((error) => {
+      console.error('PayStack script loading error:', error);
+      setIsPaystackLoading(false);
+      setError('Payment system unavailable. Please check your internet connection and try again.');
+    });
 
     return () => {
       // Cleanup script on unmount
       const existingScript = document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]');
       if (existingScript) {
-        document.body.removeChild(existingScript);
+        document.head.removeChild(existingScript);
       }
     };
   }, []);
@@ -493,6 +532,29 @@ function HotspotRegisterContent() {
     }
   };
 
+  // Utility function to wait for PayStack to be loaded
+  const waitForPaystack = () => {
+    return new Promise<void>((resolve, reject) => {
+      if (window.PaystackPop) {
+        resolve();
+        return;
+      }
+
+      let attempts = 0;
+      const maxAttempts = 50; // 5 seconds max wait time
+      const checkInterval = setInterval(() => {
+        attempts++;
+        if (window.PaystackPop) {
+          clearInterval(checkInterval);
+          resolve();
+        } else if (attempts >= maxAttempts) {
+          clearInterval(checkInterval);
+          reject(new Error('PayStack not loaded after timeout'));
+        }
+      }, 100);
+    });
+  };
+
   // NEW: Initiate popup payment instead of redirect
   const initiatePayment = async () => {
     if (!registrationData.selectedServicePlan || !pricingConfig?.enabled) {
@@ -503,6 +565,16 @@ function HotspotRegisterContent() {
     try {
       setIsPaymentProcessing(true);
       setError(null);
+
+      // Wait for PayStack to be fully loaded before proceeding
+      try {
+        await waitForPaystack();
+      } catch (error) {
+        console.error('PayStack loading timeout:', error);
+        setError('Payment system is loading. Please wait a moment and try again.');
+        setIsPaymentProcessing(false);
+        return;
+      }
 
       // Save form data to sessionStorage for reliability
       sessionStorage.setItem('registrationFormData', JSON.stringify({
@@ -546,7 +618,8 @@ function HotspotRegisterContent() {
         // Initialize Paystack popup instead of redirect
         const paystack = window.PaystackPop;
         if (!paystack) {
-          setError('Payment system not loaded. Please refresh and try again.');
+          setError('Payment system not properly initialized. Please refresh the page and try again.');
+          setIsPaymentProcessing(false);
           return;
         }
 
@@ -662,8 +735,17 @@ function HotspotRegisterContent() {
 
         console.log('Paystack popup metadata:', metadata);
 
+        // Validate PayStack public key
+        const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
+        if (!publicKey || publicKey.length < 10) {
+          console.error('PayStack public key not configured properly');
+          setError('Payment system configuration error. Please contact support.');
+          setIsPaymentProcessing(false);
+          return;
+        }
+
         const handler = paystack.setup({
-          key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
+          key: publicKey,
           email: registrationData.email,
           amount: Math.round(data.data.amount * 100), // Convert Naira to kobo
           reference: data.data.reference,
@@ -715,11 +797,24 @@ function HotspotRegisterContent() {
 
         handler.openIframe();
       } else {
-        setError(data.error || 'Failed to initiate payment');
+        console.error('Payment initiation failed:', data);
+        setError(data.error || 'Failed to initialize payment. Please try again.');
       }
     } catch (error) {
       console.error('Payment initiation error:', error);
-      setError('Error initiating payment');
+      
+      // Provide more specific error messages based on the error type
+      if (error instanceof Error) {
+        if (error.message.includes('PayStack not loaded')) {
+          setError('Payment system is loading. Please wait a moment and try again.');
+        } else if (error.message.includes('fetch')) {
+          setError('Network error. Please check your internet connection and try again.');
+        } else {
+          setError(`Payment error: ${error.message}`);
+        }
+      } else {
+        setError('Payment system error. Please check your internet connection and try again.');
+      }
     } finally {
       setIsPaymentProcessing(false);
     }
@@ -1302,11 +1397,19 @@ function HotspotRegisterContent() {
                   
                   <Button
                     onClick={handleNext}
-                    disabled={isLoading || isPaymentProcessing}
+                    disabled={isLoading || isPaymentProcessing || (currentStep === 3 && isPaystackLoading)}
                     className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 transition-all duration-200"
                   >
                     {isLoading || isPaymentProcessing ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        {isPaymentProcessing ? 'Processing Payment...' : 'Loading...'}
+                      </>
+                    ) : currentStep === 3 && isPaystackLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Loading Payment System...
+                      </>
                     ) : (
                       <>
                         {currentStep === 3 ? (

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -46,6 +47,17 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        {/* Load PayStack script globally for better reliability */}
+        <Script
+          src="https://js.paystack.co/v1/inline.js"
+          strategy="beforeInteractive"
+          onLoad={() => {
+            console.log('PayStack script loaded globally');
+          }}
+          onError={(error) => {
+            console.error('PayStack script failed to load globally:', error);
+          }}
+        />
         {children}
       </body>
     </html>
