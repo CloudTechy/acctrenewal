@@ -159,31 +159,49 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
   // Check if this is a valid MikroTik hotspot request (unless in test mode)
   if (!linkLogin && !testMode) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-orange-50">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <AlertCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
-            <h1 className="text-2xl font-bold text-red-600">Configuration Error</h1>
+            <Wifi className="mx-auto h-12 w-12 text-blue-500 mb-4" />
+            <h1 className="text-2xl font-bold text-gray-900">Connect to WiFi First</h1>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <p className="text-gray-600 text-center">
-              This page must be accessed through a MikroTik hotspot system. 
-              The required authentication parameters are missing.
+              To access the hotspot login, you need to be connected to the WiFi network.
             </p>
-            <div className="mt-6 p-4 bg-gray-50 rounded-lg text-sm text-gray-500">
-              <p><strong>Debug Info:</strong></p>
-              <p>Location: {locationId}</p>
-              <p>Missing: link-login parameter</p>
-              <p className="mt-2 text-xs">
-                <strong>For testing:</strong> Add <code>?test=true</code> to the URL
-              </p>
+            
+            <div className="bg-blue-50 rounded-lg p-4">
+              <h3 className="font-semibold text-blue-900 mb-2">📶 How to Connect:</h3>
+              <ol className="text-sm text-blue-800 space-y-1">
+                <li>1. Connect to the <strong>{locationInfo.name}</strong> WiFi network</li>
+                <li>2. Open any website in your browser</li>
+                <li>3. You'll be automatically redirected to the login page</li>
+                <li>4. Enter your username and PIN to connect</li>
+              </ol>
             </div>
-            <div className="mt-4">
+
+            {locationInfo.contactInfo?.phone && (
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs text-gray-600">
+                  <strong>Need help?</strong> Contact support: {locationInfo.contactInfo.phone}
+                </p>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-2 gap-3 mt-6">
               <Button 
+                variant="outline"
                 onClick={() => window.location.href = `${window.location.pathname}?test=true`}
-                className="w-full bg-blue-600 hover:bg-blue-700"
+                className="text-sm"
               >
-                Enable Test Mode
+                Test Mode
+              </Button>
+              
+              <Button 
+                onClick={() => window.location.reload()}
+                className="bg-blue-600 hover:bg-blue-700 text-sm"
+              >
+                Refresh Page
               </Button>
             </div>
           </CardContent>
@@ -410,7 +428,26 @@ export default function HotspotLoginPage({ params }: HotspotLoginPageProps) {
                         type="button"
                         variant="outline"
                         className="h-12 bg-transparent border-2 border-purple-500/50 text-purple-300 hover:bg-purple-500/10 hover:border-purple-400 transition-all duration-200"
-                        onClick={() => window.open(`/hotspot/register?location=${locationId}`, '_blank')}
+                        onClick={() => {
+                          // Build registration URL with all MikroTik parameters preserved
+                          const params = new URLSearchParams();
+                          params.set('location', locationId);
+                          
+                          // Preserve MikroTik parameters when going to registration
+                          const mikrotikParams = [
+                            'link-login', 'link-orig', 'mac', 'ip', 'username', 'error',
+                            'chap-challenge', 'chap-id'
+                          ];
+                          
+                          mikrotikParams.forEach(param => {
+                            const value = searchParams.get(param);
+                            if (value) {
+                              params.set(param, value);
+                            }
+                          });
+                          
+                          window.open(`/hotspot/register?${params.toString()}`, '_blank');
+                        }}
                       >
                         <div className="flex items-center gap-2">
                           <Users className="h-4 w-4" />

@@ -1411,7 +1411,25 @@ function HotspotRegisterContent() {
                           // Get the current location from URL params or default to the registration location
                           const urlParams = new URLSearchParams(window.location.search);
                           const location = urlParams.get('location') || 'awka';
-                          const hotspotUrl = `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/hotspot/${location}`;
+                          
+                          // Preserve ALL MikroTik parameters when redirecting back to login
+                          const mikrotikParams = new URLSearchParams();
+                          
+                          // Essential MikroTik parameters that need to be preserved
+                          const paramsToPreserve = [
+                            'link-login', 'link-orig', 'mac', 'ip', 'username', 'error',
+                            'chap-challenge', 'chap-id'
+                          ];
+                          
+                          paramsToPreserve.forEach(param => {
+                            const value = urlParams.get(param);
+                            if (value) {
+                              mikrotikParams.set(param, value);
+                            }
+                          });
+                          
+                          const queryString = mikrotikParams.toString();
+                          const hotspotUrl = `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/hotspot/${location}${queryString ? '?' + queryString : ''}`;
                           window.open(hotspotUrl, '_blank');
                         }}
                         className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 transition-all duration-200"
@@ -1519,7 +1537,25 @@ function HotspotRegisterContent() {
                     // Get the current location from URL params or default location
                     const urlParams = new URLSearchParams(window.location.search);
                     const location = urlParams.get('location') || 'awka';
-                    const hotspotUrl = `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/hotspot/${location}`;
+                    
+                    // Preserve ALL MikroTik parameters when redirecting back to login
+                    const mikrotikParams = new URLSearchParams();
+                    
+                    // Essential MikroTik parameters that need to be preserved
+                    const paramsToPreserve = [
+                      'link-login', 'link-orig', 'mac', 'ip', 'username', 'error',
+                      'chap-challenge', 'chap-id'
+                    ];
+                    
+                    paramsToPreserve.forEach(param => {
+                      const value = urlParams.get(param);
+                      if (value) {
+                        mikrotikParams.set(param, value);
+                      }
+                    });
+                    
+                    const queryString = mikrotikParams.toString();
+                    const hotspotUrl = `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/hotspot/${location}${queryString ? '?' + queryString : ''}`;
                     window.open(hotspotUrl, '_blank');
                   }}
                   className="text-gray-400 hover:text-blue-400 hover:bg-gray-700/50"
