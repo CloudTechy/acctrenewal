@@ -15,7 +15,8 @@ import {
   MapPin,
   MessageCircle,
   Copy,
-  CheckCircle
+  CheckCircle,
+  RefreshCw
 } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
@@ -138,6 +139,9 @@ function HotspotRegisterContent() {
   } | null>(null);
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'selection' | 'payment' | 'verification' | 'completed'>('selection');
+  // Payment system loading state
+  const [isPaystackLoading, setIsPaystackLoading] = useState(true);
+  const [paymentSystemError, setPaymentSystemError] = useState<string | null>(null);
   const [registrationData, setRegistrationData] = useState<RegistrationData>({
     phone: '',
     firstName: '',
@@ -151,12 +155,48 @@ function HotspotRegisterContent() {
     locationId: searchParams.get('location') || ''
   });
 
-  // Load Paystack inline script for popup modal
+  // Load Paystack inline script for popup modal with enhanced error handling
   useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://js.paystack.co/v1/inline.js';
-    script.async = true;
-    document.body.appendChild(script);
+    const loadPaystackScript = () => {
+      // Check if script already exists
+      const existingScript = document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]');
+      if (existingScript) {
+        // Script already loaded, check if PaystackPop is available
+        if (window.PaystackPop) {
+          setIsPaystackLoading(false);
+          return;
+        }
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://js.paystack.co/v1/inline.js';
+      script.async = true;
+      
+      script.onload = () => {
+        console.log('✅ Paystack script loaded successfully');
+        // Additional check to ensure PaystackPop is available
+        const checkPaystackPop = () => {
+          if (window.PaystackPop) {
+            setIsPaystackLoading(false);
+            setPaymentSystemError(null);
+          } else {
+            // Retry check after a short delay
+            setTimeout(checkPaystackPop, 100);
+          }
+        };
+        checkPaystackPop();
+      };
+      
+      script.onerror = (error) => {
+        console.error('❌ Failed to load Paystack script:', error);
+        setIsPaystackLoading(false);
+        setPaymentSystemError('Failed to load payment system. Please check your internet connection and try again.');
+      };
+      
+      document.body.appendChild(script);
+    };
+
+    loadPaystackScript();
 
     return () => {
       // Cleanup script on unmount
@@ -493,10 +533,21 @@ function HotspotRegisterContent() {
     }
   };
 
-  // NEW: Initiate popup payment instead of redirect
+  // Enhanced: Payment initiation with comprehensive health checks
   const initiatePayment = async () => {
     if (!registrationData.selectedServicePlan || !pricingConfig?.enabled) {
       setError('Invalid payment configuration');
+      return;
+    }
+
+    // Health check: Verify payment system is ready
+    if (isPaystackLoading) {
+      setError('Payment system is still loading. Please wait a moment and try again.');
+      return;
+    }
+
+    if (paymentSystemError) {
+      setError(paymentSystemError);
       return;
     }
 
@@ -543,10 +594,22 @@ function HotspotRegisterContent() {
       const data = await response.json();
 
       if (data.success) {
-        // Initialize Paystack popup instead of redirect
+        // Enhanced: Multiple verification checks for PaystackPop
         const paystack = window.PaystackPop;
         if (!paystack) {
-          setError('Payment system not loaded. Please refresh and try again.');
+          console.error('❌ PaystackPop not available:', { 
+            windowPaystackPop: window.PaystackPop, 
+            isPaystackLoading, 
+            paymentSystemError 
+          });
+          setError('Payment system not ready. Please refresh the page and try again.');
+          return;
+        }
+
+        // Additional type check
+        if (typeof paystack.setup !== 'function') {
+          console.error('❌ PaystackPop.setup is not a function:', paystack);
+          setError('Payment system malfunction. Please refresh the page and try again.');
           return;
         }
 
@@ -800,6 +863,45 @@ function HotspotRegisterContent() {
   const formatCurrency = (amount: string) => {
     const num = parseFloat(amount);
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(num);
+  };
+
+  // Retry loading Paystack script if it failed
+  const retryPaymentSystemLoad = () => {
+    console.log('🔄 Retrying Paystack script load...');
+    setIsPaystackLoading(true);
+    setPaymentSystemError(null);
+    
+    // Remove existing script if any
+    const existingScript = document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]');
+    if (existingScript) {
+      document.body.removeChild(existingScript);
+    }
+    
+    // Reload script with same logic as useEffect
+    const script = document.createElement('script');
+    script.src = 'https://js.paystack.co/v1/inline.js';
+    script.async = true;
+    
+    script.onload = () => {
+      console.log('✅ Paystack script retry successful');
+      const checkPaystackPop = () => {
+        if (window.PaystackPop) {
+          setIsPaystackLoading(false);
+          setPaymentSystemError(null);
+        } else {
+          setTimeout(checkPaystackPop, 100);
+        }
+      };
+      checkPaystackPop();
+    };
+    
+    script.onerror = () => {
+      console.error('❌ Paystack script retry failed');
+      setIsPaystackLoading(false);
+      setPaymentSystemError('Failed to load payment system after retry. Please check your internet connection.');
+    };
+    
+    document.body.appendChild(script);
   };
 
   // Copy PIN to clipboard function
@@ -1275,7 +1377,7 @@ function HotspotRegisterContent() {
                 )}
               </AnimatePresence>
 
-              {/* Error Display */}
+              {/* Enhanced Error Display with Retry Options */}
               {error && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -1283,7 +1385,33 @@ function HotspotRegisterContent() {
                   className="p-3 bg-red-900/50 border border-red-700/50 rounded-lg flex items-start gap-2"
                 >
                   <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-red-300">{error}</p>
+                  <div className="flex-1">
+                    <p className="text-sm text-red-300">{error}</p>
+                    {/* Show retry button for payment system errors */}
+                    {paymentSystemError && (
+                      <Button
+                        onClick={retryPaymentSystemLoad}
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 h-8 px-3 bg-red-800/50 border-red-600 text-red-300 hover:bg-red-700/50"
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Retry Loading Payment System
+                      </Button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Payment System Loading Indicator */}
+              {isPaystackLoading && currentStep === 3 && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="p-3 bg-blue-900/50 border border-blue-700/50 rounded-lg flex items-center gap-2"
+                >
+                  <Loader2 className="h-4 w-4 text-blue-400 animate-spin" />
+                  <p className="text-sm text-blue-300">Loading payment system...</p>
                 </motion.div>
               )}
 
@@ -1302,11 +1430,16 @@ function HotspotRegisterContent() {
                   
                   <Button
                     onClick={handleNext}
-                    disabled={isLoading || isPaymentProcessing}
+                    disabled={isLoading || isPaymentProcessing || (currentStep === 3 && isPaystackLoading)}
                     className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 transition-all duration-200"
                   >
                     {isLoading || isPaymentProcessing ? (
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : isPaystackLoading && currentStep === 3 ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Loading Payment System...
+                      </>
                     ) : (
                       <>
                         {currentStep === 3 ? (
