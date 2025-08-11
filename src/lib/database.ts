@@ -672,6 +672,20 @@ export async function createHotspotCustomer(customerData: {
   }
 }
 
+/**
+ * Get customer's WiFi PIN by phone number
+ * Used specifically for fetching the actual PIN from database for SMS notifications
+ */
+export async function getCustomerWiFiPin(phoneNumber: string): Promise<string | null> {
+  try {
+    const customer = await getCustomerByUsername(phoneNumber);
+    return customer?.wifi_password || null;
+  } catch (error) {
+    console.error('Error getting customer WiFi PIN:', error);
+    return null;
+  }
+}
+
 export async function getHotspotCustomerCountByLocation(locationId: string): Promise<number> {
   try {
     const { count, error } = await supabaseAdmin

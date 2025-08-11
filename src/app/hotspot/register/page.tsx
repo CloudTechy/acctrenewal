@@ -579,8 +579,7 @@ function HotspotRegisterContent() {
           firstName: registrationData.firstName,
           lastName: registrationData.lastName,
           email: registrationData.email,
-          phone: registrationData.phone,
-          password: registrationData.password // 🔧 [PIN FIX] Pass frontend-generated PIN
+          phone: registrationData.phone
         },
         servicePlanId: parseInt(registrationData.serviceId),
         action: 'initiate'
@@ -745,10 +744,57 @@ function HotspotRegisterContent() {
             // Send SMS and proceed to confirmation step
             setTimeout(async () => {
               try {
+                // For paid accounts, fetch the actual PIN from database to ensure consistency
+                console.log('Fetching actual PIN from database for paid account...');
+                let actualPin = registrationData.password; // fallback to frontend PIN
+                
+                // Retry logic to handle webhook processing delay
+                const maxRetries = 3;
+                let retryCount = 0;
+                let pinFetched = false;
+                
+                while (retryCount < maxRetries && !pinFetched) {
+                  try {
+                    console.log(`Attempt ${retryCount + 1} to fetch PIN from database...`);
+                    const pinResponse = await fetch(`/api/customer/pin?phone=${encodeURIComponent(registrationData.phone)}`);
+                    
+                    if (pinResponse.ok) {
+                      const pinData = await pinResponse.json();
+                      if (pinData.success && pinData.pin) {
+                        actualPin = pinData.pin;
+                        pinFetched = true;
+                        console.log('✅ Successfully fetched actual PIN from database for SMS');
+                        
+                        // Update registrationData to show the correct PIN in UI
+                        setRegistrationData(prev => ({ ...prev, password: actualPin }));
+                        break;
+                      }
+                    }
+                    
+                    if (!pinFetched) {
+                      retryCount++;
+                      if (retryCount < maxRetries) {
+                        console.log(`⏳ PIN not available yet, waiting 1 second before retry ${retryCount + 1}/${maxRetries}...`);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                      }
+                    }
+                  } catch (pinFetchError) {
+                    console.warn(`⚠️ Error on attempt ${retryCount + 1}:`, pinFetchError);
+                    retryCount++;
+                    if (retryCount < maxRetries) {
+                      await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                  }
+                }
+                
+                if (!pinFetched) {
+                  console.warn('⚠️ Could not fetch PIN from database after retries, using frontend PIN as fallback');
+                }
+
                 const welcomeMessage = generateWelcomeSMS({
                   firstName: registrationData.firstName,
                   phone: registrationData.phone,
-                  password: registrationData.password,
+                  password: actualPin, // Use the actual PIN from database
                   locationName: locationDetails?.display_name
                 });
                 
@@ -759,7 +805,7 @@ function HotspotRegisterContent() {
                   console.error('SMS sending failed:', smsData.error);
                   setError('Account created successfully, but SMS notification failed. Please save your credentials.');
                 } else {
-                  console.log('SMS sent successfully');
+                  console.log('SMS sent successfully with correct PIN');
                 }
               } catch (smsError) {
                 console.error('SMS error:', smsError);
@@ -769,7 +815,7 @@ function HotspotRegisterContent() {
               setCurrentStep(4);
               sessionStorage.removeItem('registrationFormData');
               setIsLoading(false);
-            }, 2000); // Give webhook some time to process
+            }, 3000); // Give webhook more time to process and create customer record
           },
           onClose: () => {
             console.log('Payment popup closed');
