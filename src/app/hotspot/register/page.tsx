@@ -579,7 +579,8 @@ function HotspotRegisterContent() {
           firstName: registrationData.firstName,
           lastName: registrationData.lastName,
           email: registrationData.email,
-          phone: registrationData.phone
+          phone: registrationData.phone,
+          password: registrationData.password // 🔧 [PIN FIX] Pass frontend-generated PIN
         },
         servicePlanId: parseInt(registrationData.serviceId),
         action: 'initiate'

@@ -301,6 +301,7 @@ function extractPaymentMetadata(event: PaystackWebhookEvent) {
   let purpose = ''; // To detect account creation payments
   let locationId = ''; // Location context for account creation
   let customerEmail = ''; // NEW: Extract email from metadata
+  let customerPin = ''; // NEW: Extract PIN from frontend
   
   // NEW: Enhanced fields for combined payment detection
   let accountCreationFee = 0;
@@ -320,6 +321,9 @@ function extractPaymentMetadata(event: PaystackWebhookEvent) {
           break;
         case 'email':
           customerEmail = field.value;
+          break;
+        case 'customer_pin':
+          customerPin = field.value;
           break;
         case 'srvid':
           srvid = field.value;
@@ -394,6 +398,7 @@ function extractPaymentMetadata(event: PaystackWebhookEvent) {
   return {
     username,
     customerEmail,
+    customerPin,
     srvid,
     timeunitexp,
     trafficunitcomb,
@@ -516,6 +521,7 @@ async function handleCombinedPayment(event: PaystackWebhookEvent, paymentDetails
   locationId: string;
   username: string;
   customerEmail: string;
+  customerPin: string;
   srvid: string;
   timeunitexp: number;
   trafficunitcomb: number;
@@ -584,7 +590,13 @@ async function handleCombinedPayment(event: PaystackWebhookEvent, paymentDetails
       const userExists = await checkRadiusUserExists(paymentDetails.username);
       
       // Initialize variables that might be needed later
-      const password = Math.floor(1000 + Math.random() * 9000).toString();
+      // 🔧 [PIN FIX] Use provided PIN from frontend, fallback to generation if not provided
+      const password = paymentDetails.customerPin || Math.floor(1000 + Math.random() * 9000).toString();
+      console.log('🔧 [PIN FIX] PIN handling:', {
+        providedPin: paymentDetails.customerPin,
+        finalPin: password,
+        source: paymentDetails.customerPin ? 'frontend' : 'generated'
+      });
       let firstname = 'User';
       let lastname = 'Account';
       
@@ -834,7 +846,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Extract payment metadata
-      const { username, srvid, timeunitexp, trafficunitcomb, limitcomb, purpose, locationId, isCombinedPayment, accountCreationFee, servicePlanPrice, servicePlanName, customerEmail } = extractPaymentMetadata(event);
+      const { username, srvid, timeunitexp, trafficunitcomb, limitcomb, purpose, locationId, isCombinedPayment, accountCreationFee, servicePlanPrice, servicePlanName, customerEmail, customerPin } = extractPaymentMetadata(event);
 
       // Enhanced logging for payment type classification
       console.log('Payment metadata extracted:', {
@@ -844,6 +856,7 @@ export async function POST(request: NextRequest) {
         accountCreationFee: isCombinedPayment ? accountCreationFee : 'N/A',
         servicePlanPrice: isCombinedPayment ? servicePlanPrice : 'N/A',
         servicePlanName: isCombinedPayment ? servicePlanName : 'N/A',
+        customerPin: customerPin ? '****' : 'not provided', // 🔧 [PIN FIX] Log PIN presence without exposing value
         paymentType: isCombinedPayment ? 'COMBINED' : (purpose === 'Account Creation' ? 'ACCOUNT_CREATION_ONLY' : 'RENEWAL_ONLY')
       });
 
@@ -857,6 +870,7 @@ export async function POST(request: NextRequest) {
           locationId,
           username,
           customerEmail,
+          customerPin,
           srvid,
           timeunitexp,
           trafficunitcomb,
