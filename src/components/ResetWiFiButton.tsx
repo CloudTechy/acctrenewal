@@ -124,7 +124,7 @@ const ResetWiFiButton: React.FC<ResetWiFiButtonProps> = ({
     <button
       onClick={handlePinReset}
       disabled={disabled || isProcessing}
-      className="h-10 px-4 text-sm font-medium rounded-lg transition-all hover:scale-102 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border bg-orange-600 hover:bg-orange-700 text-white border-orange-600 hover:border-orange-700"
+      className="h-10 px-4 text-sm font-medium rounded-lg transition-all hover:scale-102 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border bg-gray-600 hover:bg-gray-700 text-gray-200 border-gray-600 hover:border-gray-700"
     >
       <div className="flex items-center gap-2">
         <Wifi className="h-4 w-4" />
