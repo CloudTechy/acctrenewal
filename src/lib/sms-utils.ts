@@ -17,7 +17,6 @@ export function generateWelcomeSMS(data: WelcomeSMSData): string {
 Login: ${phone}
 PIN: ${password}
 Connect to WiFi and visit: ${baseUrl}
-Add credit: https://phsweb.app
 
 Enjoy fast internet!`;
 

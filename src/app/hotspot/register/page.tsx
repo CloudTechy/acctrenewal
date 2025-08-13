@@ -1028,6 +1028,21 @@ function HotspotRegisterContent() {
                 </>
               )}
 
+              {/* Device Registration Notice */}
+              <div className="mt-6 mb-4 p-4 bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-lg border border-blue-500/30">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center">
+                    <Wifi className="h-4 w-4 text-blue-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-sm font-semibold text-blue-300 mb-1">Device Registration Notice</h3>
+                    <p className="text-xs text-gray-300">
+                      If you would like to register an account for Smart TV, Xbox, PS, etc., kindly send the device MAC address to our WhatsApp number: <span className="text-blue-400 font-medium">+2349076824134</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Progress Steps */}
               <div className="flex items-center justify-center mt-8 mb-6">
                 {steps.map((step, index) => (

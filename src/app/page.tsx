@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import ChangePlanButton from '@/components/ChangePlanButton';
+import ResetWiFiButton from '@/components/ResetWiFiButton';
 import { ServicePlan, UserData, PaystackConfig } from '@/lib/types';
 
 // Dynamically import Paystack to avoid SSR issues
@@ -517,6 +518,18 @@ const UserDetails: React.FC<UserDetailsProps> = ({
                 username={originalUsername}
                 onPlanChangeSuccess={onPlanChangeSuccess}
                 isLoading={isProcessingPayment}
+              />
+              
+              {/* Show Reset WiFi PIN button for active accounts */}
+              <ResetWiFiButton
+                username={originalUsername}
+                phone={userData.phone || userData.mobile || originalUsername}
+                accountStatus={accountStatus.status}
+                disabled={isProcessingPayment}
+                onPinResetSuccess={(newPin) => {
+                  console.log('New PIN generated:', newPin);
+                  // Optionally refresh account data to show updated status
+                }}
               />
               
               <p className="text-gray-400 text-xs text-center leading-relaxed">
