@@ -15,11 +15,8 @@ import {
   RefreshCw,
   AlertTriangle,
   Wrench,
-  XCircle,
   Clock,
   Wifi,
-  WifiOff,
-  Router,
   TestTube,
   Save,
   X,
@@ -153,7 +150,7 @@ export default function HotspotManagementPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isTestingConnection, setIsTestingConnection] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [connectionTest, setConnectionTest] = useState<{[key: string]: 'testing' | 'success' | 'failed'}>({});
+
   const [showPassword, setShowPassword] = useState(false);
   
   // New state for MikroTik hotspot control
@@ -384,7 +381,6 @@ export default function HotspotManagementPage() {
   // Test router connection
   const testConnection = async (locationId: string, config: RouterConfig) => {
     setIsTestingConnection(locationId);
-    setConnectionTest(prev => ({ ...prev, [locationId]: 'testing' }));
     
     try {
       const response = await fetch('/api/hotspot/stats', {
@@ -403,11 +399,6 @@ export default function HotspotManagementPage() {
       const data = await response.json();
       console.log('Test connection response:', data);
       
-      setConnectionTest(prev => ({ 
-        ...prev, 
-        [locationId]: data.connected ? 'success' : 'failed' 
-      }));
-      
       // Update router config status
       if (data.connected) {
         await fetchRouterConfigForLocation(locationId);
@@ -415,7 +406,6 @@ export default function HotspotManagementPage() {
       
     } catch (err) {
       console.error('Connection test failed:', err);
-      setConnectionTest(prev => ({ ...prev, [locationId]: 'failed' }));
     } finally {
       setIsTestingConnection(null);
     }
@@ -478,20 +468,7 @@ export default function HotspotManagementPage() {
     }
   };
 
-  const getConnectionIcon = (config?: RouterConfig) => {
-    if (!config) return <Router className="h-4 w-4 text-gray-400" />;
-    
-    switch (config.connection_status) {
-      case 'connected':
-        return <Wifi className="h-4 w-4 text-green-400" />;
-      case 'disconnected':
-        return <WifiOff className="h-4 w-4 text-yellow-400" />;
-      case 'error':
-        return <XCircle className="h-4 w-4 text-red-400" />;
-      default:
-        return <Clock className="h-4 w-4 text-gray-400" />;
-    }
-  };
+
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -943,7 +920,7 @@ export default function HotspotManagementPage() {
         <div className="space-y-6">
           <h2 className="text-2xl font-bold text-white">Hotspot Locations</h2>
           
-          <div className="grid gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {locations.map((location, index) => (
               <motion.div
                 key={location.id}
@@ -951,11 +928,13 @@ export default function HotspotManagementPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 * index }}
               >
-                <Card className="bg-gray-900/80 border-gray-700 hover:bg-gray-900/90 transition-all duration-200">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
+                <Card className="bg-gray-900/80 border-gray-700 hover:bg-gray-900/90 transition-all duration-200 h-full">
+                  <CardContent className="p-6 h-full flex flex-col">
+                    
+                    {/* Header Section */}
+                    <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-3">
+                        <div className="flex items-center gap-3 mb-2">
                           <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg">
                             <MapPin className="h-5 w-5 text-white" />
                           </div>
@@ -965,195 +944,64 @@ export default function HotspotManagementPage() {
                             {location.city && location.state && (
                               <p className="text-sm text-gray-500">{location.city}, {location.state}</p>
                             )}
-                            {/* New fields display */}
-                            <div className="flex items-center gap-4 mt-1">
-                              {location.group_id && (
-                                <p className="text-xs text-gray-500">
-                                  <span className="text-gray-400">Group:</span> {location.group_id}
-                                </p>
-                              )}
-                              {location.registration_enabled !== undefined && (
-                                <div className="flex items-center gap-1">
-                                  <span className="text-xs text-gray-400">Hotspot:</span>
-                                  <Badge 
-                                    variant={location.registration_enabled ? "default" : "secondary"}
-                                    className={`text-xs ${location.registration_enabled 
-                                      ? 'bg-green-900/50 text-green-400 border-green-700' 
-                                      : 'bg-gray-600 text-gray-300'}`}
-                                  >
-                                    {location.registration_enabled ? 'Enabled' : 'Disabled'}
-                                  </Badge>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {getConnectionIcon(location.routerConfig)}
-                            {getConnectionStatusBadge(location.routerConfig)}
                           </div>
                         </div>
-
-                        {/* Connection Details */}
-                        {location.routerConfig && (
-                          <div className="bg-gray-800/50 rounded-lg p-3 mb-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="text-sm font-medium text-white flex items-center gap-2">
-                                <Router className="h-4 w-4" />
-                                Router Connection
-                              </h4>
-                              <div className="flex items-center gap-2">
-                                {connectionTest[location.id] && (
-                                  <Badge variant={connectionTest[location.id] === 'success' ? 'default' : 'destructive'} className="text-xs">
-                                    {connectionTest[location.id] === 'testing' && 'Testing...'}
-                                    {connectionTest[location.id] === 'success' && 'Test Passed'}
-                                    {connectionTest[location.id] === 'failed' && 'Test Failed'}
-                                  </Badge>
-                                )}
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => testConnection(location.id, location.routerConfig!)}
-                                  disabled={isTestingConnection === location.id}
-                                  className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600 h-6 px-2"
-                                >
-                                  <TestTube className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3 text-xs">
-                              <div className="text-gray-400">
-                                <span>Host: </span>
-                                <span className="text-gray-300">{location.routerConfig.host}:{location.routerConfig.port}</span>
-                              </div>
-                              <div className="text-gray-400">
-                                <span>Type: </span>
-                                <span className="text-gray-300 capitalize">{location.routerConfig.connection_type}</span>
-                              </div>
-                              {location.routerConfig.last_connected_at && (
-                                <div className="text-gray-400 col-span-2">
-                                  <span>Last Connected: </span>
-                                  <span className="text-gray-300">
-                                    {new Date(location.routerConfig.last_connected_at).toLocaleString()}
-                                  </span>
-                                </div>
-                              )}
-                              {location.routerConfig.last_error && (
-                                <div className="text-red-400 col-span-2">
-                                  <span>Error: </span>
-                                  <span className="text-red-300">{location.routerConfig.last_error}</span>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Connection Stats */}
-                            {location.connectionDetails && (
-                              <div className="mt-3 pt-3 border-t border-gray-700">
-                                <div className="grid grid-cols-2 gap-3 text-xs">
-                                  <div className="text-gray-400">
-                                    <span>Uptime: </span>
-                                    <span className="text-green-400">{location.connectionDetails.uptime}</span>
-                                  </div>
-                                  <div className="text-gray-400">
-                                    <span>Version: </span>
-                                    <span className="text-gray-300">{location.connectionDetails.version}</span>
-                                  </div>
-                                  <div className="text-gray-400">
-                                    <span>CPU: </span>
-                                    <span className="text-blue-400">{location.connectionDetails.cpuLoad}%</span>
-                                  </div>
-                                  <div className="text-gray-400">
-                                    <span>Memory: </span>
-                                    <span className="text-purple-400">{location.connectionDetails.memoryUsage.toFixed(1)}%</span>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                          <div>
-                            <p className="text-sm text-gray-400">Active Users</p>
-                            <p className="text-xl font-semibold text-blue-400">{location.activeUsers}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-400">Registered Customers</p>
-                            <p className="text-xl font-semibold text-purple-400">{location.registeredCustomers}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-400">Last Activity</p>
-                            <p className="text-sm text-gray-300">{location.lastActivity}</p>
-                          </div>
-                        </div>
-
-                        {/* Owner Information */}
-                        {location.default_owner_id && (
-                          <div className="bg-gray-800/50 rounded-lg p-3 mb-4">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Users className="h-4 w-4 text-purple-400" />
-                              <h4 className="text-sm font-medium text-white">Account Owner</h4>
-                            </div>
-                            <div className="text-xs text-gray-400">
-                              {(() => {
-                                const owner = accountOwners.find(o => o.id === location.default_owner_id);
-                                return owner ? (
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                      <span>Name: </span>
-                                      <span className="text-gray-300">{owner.name}</span>
-                                    </div>
-                                    <div>
-                                      <span>Commission: </span>
-                                      <span className="text-purple-400">{owner.commission_rate}%</span>
-                                    </div>
-                                    {owner.email && (
-                                      <div className="col-span-2">
-                                        <span>Email: </span>
-                                        <span className="text-gray-300">{owner.email}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="text-red-400">Owner not found</span>
-                                );
-                              })()}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="bg-gray-800/50 rounded-lg p-3">
-                          <p className="text-xs text-gray-400 mb-1">Hotspot Login URL:</p>
-                          <div className="flex items-center gap-2">
-                            <code className="text-xs bg-gray-700 px-2 py-1 rounded border border-gray-600 flex-1 text-gray-300">
-                              {location.loginUrl}
-                            </code>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => copyToClipboard(location.loginUrl)}
-                              className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700 h-6 px-2"
+                        
+                        {/* Status Badges */}
+                        <div className="flex items-center gap-2 mb-3">
+                          {location.registration_enabled !== undefined && (
+                            <Badge 
+                              variant={location.registration_enabled ? "default" : "secondary"}
+                              className={`text-xs ${location.registration_enabled 
+                                ? 'bg-green-900/50 text-green-400 border-green-700' 
+                                : 'bg-gray-600 text-gray-300'}`}
                             >
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                            <Link href={location.loginUrl} target="_blank">
-                              <Button size="sm" variant="outline" className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700 h-6 px-2">
-                                <ExternalLink className="h-3 w-3" />
-                              </Button>
-                            </Link>
-                          </div>
+                              {location.registration_enabled ? 'Enabled' : 'Disabled'}
+                            </Badge>
+                          )}
+                          {getConnectionStatusBadge(location.routerConfig)}
                         </div>
                       </div>
+                    </div>
 
-                      <div className="flex flex-col gap-2 ml-4">
+                    {/* Quick Stats Section */}
+                    <div className="grid grid-cols-1 gap-3 mb-4">
+                      <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-blue-400" />
+                          <span className="text-sm text-gray-400">Active Users</span>
+                        </div>
+                        <span className="text-lg font-semibold text-blue-400">{location.activeUsers}</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <Wifi className="h-4 w-4 text-purple-400" />
+                          <span className="text-sm text-gray-400">Registered Customers</span>
+                        </div>
+                        <span className="text-lg font-semibold text-purple-400">{location.registeredCustomers}</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-orange-400" />
+                          <span className="text-sm text-gray-400">Last Activity</span>
+                        </div>
+                        <span className="text-sm text-gray-300">{location.lastActivity}</span>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons Section */}
+                    <div className="mt-auto space-y-2">
+                      {/* Primary Actions Row */}
+                      <div className="flex gap-2">
                         {/* MikroTik Hotspot Control Buttons */}
                         {location.routerConfig && location.routerConfig.connection_status === 'connected' && (
-                          <div className="flex flex-col gap-1 mb-2">
+                          <>
                             <Button 
                               size="sm" 
                               variant="outline" 
-                              className={`bg-gray-800 border-gray-600 text-white hover:bg-green-700 ${
-                                hotspotStatus[location.id] === true ? 'border-green-500 bg-green-900/50' : ''
-                              }`}
+                              className={`flex-1 ${hotspotStatus[location.id] === true ? 'border-green-500 bg-green-900/50' : ''}`}
                               onClick={() => enableHotspot(location.id)}
                               disabled={hotspotToggling[location.id]}
                             >
@@ -1162,13 +1010,12 @@ export default function HotspotManagementPage() {
                               ) : (
                                 <Power className="h-3 w-3" />
                               )}
+                              <span className="ml-1 text-xs">Enable</span>
                             </Button>
                             <Button 
                               size="sm" 
                               variant="outline" 
-                              className={`bg-gray-800 border-gray-600 text-white hover:bg-red-700 ${
-                                hotspotStatus[location.id] === false ? 'border-red-500 bg-red-900/50' : ''
-                              }`}
+                              className={`flex-1 ${hotspotStatus[location.id] === false ? 'border-red-500 bg-red-900/50' : ''}`}
                               onClick={() => disableHotspot(location.id)}
                               disabled={hotspotToggling[location.id]}
                             >
@@ -1177,44 +1024,82 @@ export default function HotspotManagementPage() {
                               ) : (
                                 <PowerOff className="h-3 w-3" />
                               )}
+                              <span className="ml-1 text-xs">Disable</span>
                             </Button>
-                          </div>
+                          </>
                         )}
-                        
+                      </div>
+
+                      {/* Secondary Actions Row */}
+                      <div className="grid grid-cols-2 gap-2">
                         <Button 
                           size="sm" 
                           variant="outline" 
                           className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
                           onClick={() => openRouterConfig(location.id)}
+                          title="Configure Router"
                         >
-                          <Wrench className="h-4 w-4" />
+                          <Wrench className="h-3 w-3 mr-1" />
+                          <span className="text-xs">Router</span>
                         </Button>
                         <Button 
                           size="sm" 
                           variant="outline" 
                           className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
                           onClick={() => handleEditLocation(location.id)}
+                          title="Edit Location"
                         >
-                          <Edit3 className="h-4 w-4" />
+                          <Edit3 className="h-3 w-3 mr-1" />
+                          <span className="text-xs">Edit</span>
                         </Button>
+                      </div>
+
+                      {/* Tertiary Actions Row */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <Link href={`/admin/locations/${location.id}/plans`} className="w-full">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="w-full bg-gray-800 border-gray-600 text-white hover:bg-blue-700"
+                            title="Manage Service Plans"
+                          >
+                            <CreditCard className="h-3 w-3 mr-1" />
+                            <span className="text-xs">Plans</span>
+                          </Button>
+                        </Link>
                         <Button 
                           size="sm" 
                           variant="outline" 
                           className="bg-gray-800 border-gray-600 text-white hover:bg-red-700"
                           onClick={() => handleDeleteLocation(location.id)}
+                          title="Delete Location"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3 w-3 mr-1" />
+                          <span className="text-xs">Delete</span>
                         </Button>
-                        <Link href={`/admin/locations/${location.id}/plans`}>
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="bg-gray-800 border-gray-600 text-white hover:bg-blue-700"
-                            title="Manage Service Plans"
+                      </div>
+
+                      {/* Hotspot Login URL */}
+                      <div className="mt-3 pt-3 border-t border-gray-700">
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs bg-gray-700 px-2 py-1 rounded border border-gray-600 flex-1 text-gray-300 truncate">
+                            {location.loginUrl}
+                          </code>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => copyToClipboard(location.loginUrl)}
+                            className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700 h-6 px-2"
+                            title="Copy URL"
                           >
-                            <CreditCard className="h-4 w-4" />
+                            <Copy className="h-3 w-3" />
                           </Button>
-                        </Link>
+                          <Link href={location.loginUrl} target="_blank">
+                            <Button size="sm" variant="outline" className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700 h-6 px-2" title="Open URL">
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
+                          </Link>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
