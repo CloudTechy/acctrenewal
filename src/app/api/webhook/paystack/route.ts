@@ -242,6 +242,7 @@ async function createRadiusUser(userInfo: {
       enabled: '1',
       acctype: '0',
       srvid: userInfo.srvid,
+      simuse: '2', // Set simultaneous use to 2
       firstname: userInfo.firstname,
       lastname: userInfo.lastname,
       email: userInfo.email,

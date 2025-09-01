@@ -324,6 +324,7 @@ export async function POST(request: NextRequest) {
       enabled: enabled.toString(),
       acctype: acctype.toString(),
       srvid,
+      simuse: '2', // Set simultaneous use to 2
       firstname,
       lastname,
       email,
