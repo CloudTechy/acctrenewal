@@ -91,11 +91,11 @@ const ResetWiFiButton: React.FC<ResetWiFiButtonProps> = ({
             </span>
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-3">
           <button
             onClick={handlePinReset}
             disabled={isProcessing}
-            className="flex-1 h-10 px-4 text-sm font-medium rounded-lg transition-all hover:scale-102 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
+            className="flex-1 h-12 sm:h-10 px-4 py-3 text-sm font-medium rounded-lg transition-all hover:scale-102 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
           >
             <div className="flex items-center justify-center gap-2">
               {isProcessing ? (
@@ -103,7 +103,7 @@ const ResetWiFiButton: React.FC<ResetWiFiButtonProps> = ({
               ) : (
                 <Shield className="h-4 w-4" />
               )}
-              <span>
+              <span className="whitespace-nowrap">
                 {isProcessing ? 'Resetting...' : 'Yes, Reset PIN'}
               </span>
             </div>
@@ -111,9 +111,9 @@ const ResetWiFiButton: React.FC<ResetWiFiButtonProps> = ({
           <button
             onClick={handleCancel}
             disabled={isProcessing}
-            className="flex-1 h-10 px-4 text-sm font-medium rounded-lg transition-all hover:scale-102 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border bg-gray-700 hover:bg-gray-600 text-gray-200 border-gray-600 hover:border-gray-500"
+            className="flex-1 h-12 sm:h-10 px-4 py-3 text-sm font-medium rounded-lg transition-all hover:scale-102 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border bg-gray-700 hover:bg-gray-600 text-gray-200 border-gray-600 hover:border-gray-500"
           >
-            Cancel
+            <span className="whitespace-nowrap">Cancel</span>
           </button>
         </div>
       </div>
@@ -124,11 +124,11 @@ const ResetWiFiButton: React.FC<ResetWiFiButtonProps> = ({
     <button
       onClick={handlePinReset}
       disabled={disabled || isProcessing}
-      className="h-10 px-4 text-sm font-medium rounded-lg transition-all hover:scale-102 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border bg-gray-600 hover:bg-gray-700 text-gray-200 border-gray-600 hover:border-gray-700"
+      className="h-12 sm:h-10 px-4 py-3 text-sm font-medium rounded-lg transition-all hover:scale-102 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border bg-gray-600 hover:bg-gray-700 text-gray-200 border-gray-600 hover:border-gray-700 w-full"
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-center gap-2">
         <Wifi className="h-4 w-4" />
-        <span>Reset WiFi PIN</span>
+        <span className="whitespace-nowrap">Reset WiFi PIN</span>
       </div>
     </button>
   );

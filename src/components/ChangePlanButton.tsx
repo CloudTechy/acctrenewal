@@ -123,15 +123,15 @@ const ChangePlanButton: React.FC<ChangePlanButtonProps> = ({
       <button
         onClick={() => setShowPlanModal(true)}
         disabled={disabled || isLoading || isProcessing}
-        className={`h-10 px-4 text-sm font-medium rounded-lg transition-all hover:scale-102 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border ${getButtonStyle()}`}
+        className={`h-12 sm:h-10 px-4 py-3 text-sm font-medium rounded-lg transition-all hover:scale-102 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border w-full ${getButtonStyle()}`}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-center gap-2">
           {isLoading || isProcessing ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             getButtonIcon()
           )}
-          <span>
+          <span className="whitespace-nowrap">
             {isLoading || isProcessing ? 'Processing...' : getButtonText()}
           </span>
           {!isLoading && !isProcessing && (

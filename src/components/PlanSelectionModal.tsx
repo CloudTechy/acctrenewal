@@ -94,14 +94,14 @@ const PlanCard: React.FC<PlanCardProps> = ({
       )}
 
       {/* Horizontal Layout for Single Column */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         {/* Left side - Plan Info */}
         <div className="flex-1">
           <h3 className="text-base font-bold text-gray-100 mb-1">
             {plan.srvname || 'Unnamed Plan'}
           </h3>
           {plan.descr && (
-            <div className="text-sm text-gray-400 mb-2">
+            <div className="text-sm text-gray-400 mb-2 line-clamp-2">
               {plan.descr}
             </div>
           )}
@@ -117,7 +117,7 @@ const PlanCard: React.FC<PlanCardProps> = ({
         </div>
 
         {/* Right side - Price and Actions */}
-        <div className="text-right ml-4">
+        <div className="text-right sm:ml-4">
           <div className="text-2xl font-bold text-blue-400 mb-2">
             {isFree ? 'FREE' : formatCurrency(totalPrice)}
           </div>
@@ -274,7 +274,7 @@ const PlanSelectionModal: React.FC<PlanSelectionModalProps> = ({
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: 20 }}
-          className="relative w-full max-w-4xl max-h-[60vh] bg-gray-900 rounded-xl border border-gray-700 shadow-2xl overflow-hidden mx-4"
+          className="relative w-full max-w-4xl max-h-[80vh] sm:max-h-[60vh] bg-gray-900 rounded-xl border border-gray-700 shadow-2xl overflow-hidden mx-2 sm:mx-4"
         >
           {/* Header */}
           <div className="p-4 border-b border-gray-700 bg-gray-800/50">
@@ -310,7 +310,7 @@ const PlanSelectionModal: React.FC<PlanSelectionModalProps> = ({
           </div>
 
           {/* Content */}
-          <div className="p-4 overflow-y-auto max-h-[35vh]">
+          <div className="p-4 overflow-y-auto max-h-[50vh] sm:max-h-[35vh]">
             {eligiblePlans.length === 0 ? (
               <div className="text-center py-8">
                 <div className="text-gray-400 text-base mb-2">No plans available for upgrade</div>
@@ -347,8 +347,8 @@ const PlanSelectionModal: React.FC<PlanSelectionModalProps> = ({
           {/* Footer */}
           {eligiblePlans.length > 0 && (
             <div className="p-4 border-t border-gray-700 bg-gray-800/30">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="text-sm text-gray-400 flex-1">
+              <div className="flex flex-col gap-4">
+                <div className="text-sm text-gray-400 text-center sm:text-left">
                   {selectedPlan ? (
                     <span>
                       Selected: <span className="text-blue-400 font-medium">{selectedPlan.srvname}</span>
@@ -359,28 +359,28 @@ const PlanSelectionModal: React.FC<PlanSelectionModalProps> = ({
                   )}
                 </div>
 
-                <div className="flex gap-3 flex-shrink-0">
+                <div className="flex flex-col sm:flex-row gap-3 w-full">
                   <button
                     onClick={onClose}
                     disabled={isLoading}
-                    className="px-3 py-2 text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-50 text-sm"
+                    className="flex-1 h-12 sm:h-10 px-4 py-3 text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-50 text-sm font-medium rounded-lg border border-gray-600 hover:border-gray-500 hover:bg-gray-700/50"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleConfirmSelection}
                     disabled={!selectedPlan || isLoading}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+                    className="flex-1 h-12 sm:h-10 px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
                   >
                     {isLoading ? (
                       <>
-                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        Processing...
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        <span className="whitespace-nowrap">Processing...</span>
                       </>
                     ) : (
                       <>
-                        <Check className="h-3 w-3" />
-                        Change Plan
+                        <Check className="h-4 w-4" />
+                        <span className="whitespace-nowrap">Choose Plan</span>
                       </>
                     )}
                   </button>

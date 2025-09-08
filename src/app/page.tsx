@@ -405,9 +405,9 @@ const PaymentButton: React.FC<{
     return (
       <Button 
         disabled={true}
-        className="h-16 px-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+        className="h-16 sm:h-14 px-6 sm:px-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25 text-base sm:text-lg disabled:opacity-50 disabled:cursor-not-allowed w-full"
       >
-        <span>Loading Payment...</span>
+        <span className="whitespace-nowrap">Loading Payment...</span>
       </Button>
     );
   }
@@ -417,14 +417,14 @@ const PaymentButton: React.FC<{
     text: `Pay ${formatCurrency(servicePlan.totalPrice || 0)} - Renew Plan`,
     onSuccess: onPaymentSuccess,
     onClose: onPaymentClose,
-    className: "h-16 px-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+    className: "h-16 sm:h-14 px-6 sm:px-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25 text-base sm:text-lg disabled:opacity-50 disabled:cursor-not-allowed w-full"
   };
 
   if (isProcessingPayment) {
     return (
       <Button disabled={true} className={componentProps.className}>
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent mr-3"></div>
-        Processing Payment...
+        <span className="whitespace-nowrap">Processing Payment...</span>
       </Button>
     );
   }
@@ -501,7 +501,7 @@ const UserDetails: React.FC<UserDetailsProps> = ({
             </div>
 
             {/* Payment and Plan Change Buttons */}
-            <div className="pt-4 space-y-3 border-t border-gray-700/30">
+            <div className="pt-4 space-y-4 sm:space-y-3 border-t border-gray-700/30">
               <PaymentButton
                 paystackConfig={paystackConfig}
                 onPaymentSuccess={onPaymentSuccess}
