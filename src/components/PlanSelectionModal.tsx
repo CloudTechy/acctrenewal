@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Check, AlertTriangle, Clock, ArrowRight } from 'lucide-react';
+import { X, Check, Clock, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ServicePlan } from '@/lib/plan-filters';
 import { 
@@ -258,6 +258,14 @@ const PlanSelectionModal: React.FC<PlanSelectionModalProps> = ({
           -webkit-box-orient: vertical;
           overflow: hidden;
         }
+        .modal-container {
+          max-height: min(90vh, 600px);
+        }
+        @media (min-width: 640px) {
+          .modal-container {
+            max-height: min(70vh, 500px);
+          }
+        }
       `}</style>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         {/* Backdrop */}
@@ -274,7 +282,7 @@ const PlanSelectionModal: React.FC<PlanSelectionModalProps> = ({
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: 20 }}
-          className="relative w-full max-w-4xl max-h-[80vh] sm:max-h-[60vh] bg-gray-900 rounded-xl border border-gray-700 shadow-2xl overflow-hidden mx-2 sm:mx-4"
+          className="relative w-full max-w-4xl bg-gray-900 rounded-xl border border-gray-700 shadow-2xl overflow-hidden mx-2 sm:mx-4 flex flex-col modal-container"
         >
           {/* Header */}
           <div className="p-4 border-b border-gray-700 bg-gray-800/50">
@@ -285,7 +293,7 @@ const PlanSelectionModal: React.FC<PlanSelectionModalProps> = ({
                 </h2>
                 <p className="text-gray-400 mt-1 text-sm">
                   {accountStatus === 'EXPIRED' 
-                    ? 'Your account has expired. Choose a plan to renew your subscription.'
+                    ? 'Choose a plan to renew your subscription.'
                     : 'Select a new plan to upgrade your account.'}
                 </p>
               </div>
@@ -298,19 +306,10 @@ const PlanSelectionModal: React.FC<PlanSelectionModalProps> = ({
               </button>
             </div>
 
-            {/* Account Status Warning - More compact */}
-            {accountStatus === 'EXPIRED' && (
-              <div className="mt-3 p-2 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-red-400" />
-                <div className="text-sm text-red-300">
-                  Your account has expired. Select a plan to restore access to your services.
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Content */}
-          <div className="p-4 overflow-y-auto max-h-[50vh] sm:max-h-[35vh]">
+          <div className="flex-1 p-4 overflow-y-auto">
             {eligiblePlans.length === 0 ? (
               <div className="text-center py-8">
                 <div className="text-gray-400 text-base mb-2">No plans available for upgrade</div>
@@ -346,8 +345,10 @@ const PlanSelectionModal: React.FC<PlanSelectionModalProps> = ({
 
           {/* Footer */}
           {eligiblePlans.length > 0 && (
-            <div className="p-4 border-t border-gray-700 bg-gray-800/30">
-              <div className="flex flex-col gap-4">
+            <div className="sticky bottom-0 p-4 border-t border-gray-700 bg-gray-900/95 backdrop-blur-sm shadow-lg">
+              {/* Gradient overlay for better visual separation */}
+              <div className="absolute -top-4 left-0 right-0 h-4 bg-gradient-to-t from-gray-900/95 to-transparent pointer-events-none"></div>
+              <div className="flex flex-col gap-4 relative z-10">
                 <div className="text-sm text-gray-400 text-center sm:text-left">
                   {selectedPlan ? (
                     <span>
@@ -363,14 +364,14 @@ const PlanSelectionModal: React.FC<PlanSelectionModalProps> = ({
                   <button
                     onClick={onClose}
                     disabled={isLoading}
-                    className="flex-1 h-12 sm:h-10 px-4 py-3 text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-50 text-sm font-medium rounded-lg border border-gray-600 hover:border-gray-500 hover:bg-gray-700/50"
+                    className="flex-1 h-12 sm:h-10 px-4 py-3 text-gray-400 hover:text-gray-200 transition-all duration-200 disabled:opacity-50 text-sm font-medium rounded-lg border border-gray-600 hover:border-gray-500 hover:bg-gray-700/50 min-h-[48px] focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900"
                   >
-                    Cancel
+                    <span className="whitespace-nowrap">Cancel</span>
                   </button>
                   <button
                     onClick={handleConfirmSelection}
                     disabled={!selectedPlan || isLoading}
-                    className="flex-1 h-12 sm:h-10 px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+                    className="flex-1 h-12 sm:h-10 px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm min-h-[48px] focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-gray-900"
                   >
                     {isLoading ? (
                       <>
