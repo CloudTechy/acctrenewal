@@ -239,6 +239,19 @@ export async function POST(request: NextRequest) {
 
     // Parse the webhook event
     const event: PaystackWebhookEvent = JSON.parse(body);
+    
+    // Handle double-encoded metadata from Paystack
+    // Paystack sometimes sends metadata as a JSON string instead of an object
+    if (typeof event.data.metadata === 'string') {
+      try {
+        event.data.metadata = JSON.parse(event.data.metadata);
+        console.log('Parsed double-encoded metadata from Paystack');
+      } catch (parseError) {
+        console.error('Failed to parse metadata string:', parseError);
+        // Continue with string metadata - extractPaymentMetadata will handle it
+      }
+    }
+    
     console.log('Received Paystack webhook event:', event.event, 'Reference:', event.data.reference);
 
     // Handle successful charge event
