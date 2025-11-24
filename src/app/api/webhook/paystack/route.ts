@@ -923,6 +923,7 @@ export async function POST(request: NextRequest) {
             renewal_start_date: new Date().toISOString(),
             renewal_end_date: new Date(Date.now() + timeunitexp * 24 * 60 * 60 * 1000).toISOString(),
             customer_location: '',
+            transaction_type: 'renewal' as const, // Add missing transaction_type
           };
 
           const preliminaryRecord = await createRenewalTransaction(preliminaryTransaction);
