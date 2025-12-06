@@ -112,6 +112,7 @@ export interface RenewalTransaction {
   renewal_end_date?: string
   payment_method?: string
   customer_location?: string
+  transaction_type?: 'renewal' | 'account_creation' // Added missing field
   created_at: string
   updated_at?: string
 }
