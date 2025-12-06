@@ -936,6 +936,7 @@ export async function POST(request: NextRequest) {
             renewal_start_date: new Date().toISOString(),
             renewal_end_date: new Date(Date.now() + timeunitexp * 24 * 60 * 60 * 1000).toISOString(),
             customer_location: '',
+            transaction_type: 'renewal' as const, // Add missing transaction_type
           };
 
           const preliminaryRecord = await createRenewalTransaction(preliminaryTransaction);
@@ -944,9 +945,29 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ message: 'Already processed' }, { status: 200 });
           }
           console.log('Created preliminary transaction record:', preliminaryRecord.id);
-        } catch (transactionError) {
-          console.log('Transaction already exists (race condition prevented):', transactionError);
-          return NextResponse.json({ message: 'Already processed' }, { status: 200 });
+        } catch (transactionError: any) {
+          // Better error handling: differentiate between duplicate transaction and other errors
+          const errorCode = transactionError?.code;
+          const errorMessage = transactionError?.message || '';
+          
+          // Check if it's a duplicate key violation (23505 = unique_violation)
+          if (errorCode === '23505' || errorMessage.includes('duplicate key') || errorMessage.includes('paystack_reference_key')) {
+            console.log('Transaction already exists (duplicate key prevented):', transactionError);
+            return NextResponse.json({ message: 'Already processed' }, { status: 200 });
+          }
+          
+          // For other errors (schema issues, connection problems, etc.), log and return error
+          console.error('Error creating preliminary transaction record:', {
+            code: errorCode,
+            message: errorMessage,
+            error: transactionError
+          });
+          
+          // Return 500 so Paystack will retry the webhook
+          return NextResponse.json({ 
+            error: 'Failed to process transaction',
+            message: 'Database error occurred. Please contact support if issue persists.'
+          }, { status: 500 });
         }
 
         // Add credits to user account
