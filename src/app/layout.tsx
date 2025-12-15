@@ -1,16 +1,22 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
-const geistSans = Geist({
+// Use local font files to avoid remote fetch issues during build (turbopack resolver)
+// Place the font files at: /public/fonts/geist-sans.woff2 and /public/fonts/geist-mono.woff2
+const geistSans = localFont({
+  // relative path from this file to the public folder
+  src: "../../public/fonts/geist-sans.woff2",
   variable: "--font-geist-sans",
-  subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
+const geistMono = localFont({
+  // relative path from this file to the public folder
+  src: "../../public/fonts/geist-mono.woff2",
   variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -47,6 +53,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
+        suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
