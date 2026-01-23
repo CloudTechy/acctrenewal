@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Next.js Application
+  acctrenewal-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: acctrenewal-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Node environment
+      - NODE_ENV=production
+      
+      # Supabase Configuration (replace with your actual values)
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      
+      # Paystack Configuration
+      - PAYSTACK_SECRET_KEY=${PAYSTACK_SECRET_KEY}
+      - PAYSTACK_PUBLIC_KEY=${PAYSTACK_PUBLIC_KEY}
+      - PAYSTACK_WEBHOOK_SECRET=${PAYSTACK_WEBHOOK_SECRET}
+      
+      # RADIUS Manager API Configuration
+      - RADIUS_API_URL=${RADIUS_API_URL:-https://portal1.phsweb.ng/api/sysapi.php}
+      - RADIUS_API_USER=${RADIUS_API_USER:-phsweb}
+      - RADIUS_API_PASS=${RADIUS_API_PASS}
+      
+      # MikroTik Router Configuration - Awka
+      - MIKROTIK_AWKA_HOST=${MIKROTIK_AWKA_HOST:-192.168.50.2}
+      - MIKROTIK_AWKA_USER=${MIKROTIK_AWKA_USER:-admin}
+      - MIKROTIK_AWKA_PASSWORD=${MIKROTIK_AWKA_PASSWORD}
+      - MIKROTIK_AWKA_PORT=${MIKROTIK_AWKA_PORT:-8728}
+      - MIKROTIK_AWKA_API_PORT=${MIKROTIK_AWKA_API_PORT:-80}
+      
+      # MikroTik Router Configuration - Lagos (if applicable)
+      - MIKROTIK_LAGOS_HOST=${MIKROTIK_LAGOS_HOST}
+      - MIKROTIK_LAGOS_USER=${MIKROTIK_LAGOS_USER}
+      - MIKROTIK_LAGOS_PASSWORD=${MIKROTIK_LAGOS_PASSWORD}
+      
+      # MikroTik Router Configuration - Abuja (if applicable)
+      - MIKROTIK_ABUJA_HOST=${MIKROTIK_ABUJA_HOST}
+      - MIKROTIK_ABUJA_USER=${MIKROTIK_ABUJA_USER}
+      - MIKROTIK_ABUJA_PASSWORD=${MIKROTIK_ABUJA_PASSWORD}
+      
+      # Application Settings
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+    
+    # Mount volume for logs (optional)
+    volumes:
+      - ./logs:/app/logs
+    
+    networks:
+      - acctrenewal-network
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 512M
+
+networks:
+  acctrenewal-network:
+    driver: bridge
+
+volumes:
+  logs:
+    driver: local
