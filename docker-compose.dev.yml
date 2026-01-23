@@ -1,0 +1,60 @@
+version: '3.8'
+
+# Development Docker Compose configuration
+# Usage: docker-compose -f docker-compose.dev.yml up
+
+services:
+  # Next.js Development Server with Hot Reload
+  acctrenewal-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: acctrenewal-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Node environment
+      - NODE_ENV=development
+      
+      # Supabase Configuration
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      
+      # Paystack Configuration (use test keys for development)
+      - PAYSTACK_SECRET_KEY=${PAYSTACK_SECRET_KEY}
+      - PAYSTACK_PUBLIC_KEY=${PAYSTACK_PUBLIC_KEY}
+      - PAYSTACK_WEBHOOK_SECRET=${PAYSTACK_WEBHOOK_SECRET}
+      
+      # RADIUS Manager API Configuration
+      - RADIUS_API_URL=${RADIUS_API_URL:-https://portal1.phsweb.ng/api/sysapi.php}
+      - RADIUS_API_USER=${RADIUS_API_USER:-phsweb}
+      - RADIUS_API_PASS=${RADIUS_API_PASS}
+      
+      # MikroTik Router Configuration
+      - MIKROTIK_AWKA_HOST=${MIKROTIK_AWKA_HOST:-192.168.50.2}
+      - MIKROTIK_AWKA_USER=${MIKROTIK_AWKA_USER:-admin}
+      - MIKROTIK_AWKA_PASSWORD=${MIKROTIK_AWKA_PASSWORD}
+      - MIKROTIK_AWKA_PORT=${MIKROTIK_AWKA_PORT:-8728}
+      - MIKROTIK_AWKA_API_PORT=${MIKROTIK_AWKA_API_PORT:-80}
+      
+      # Development Settings
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+    
+    # Mount source code for hot reload
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    
+    networks:
+      - acctrenewal-dev-network
+    
+    # Run development server
+    command: npm run dev
+
+networks:
+  acctrenewal-dev-network:
+    driver: bridge
