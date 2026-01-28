@@ -279,6 +279,17 @@ export async function POST(request: NextRequest) {
     if (event.event === 'charge.success') {
       const { reference } = event.data;
       
+      // Get client IP for rate limiting
+      const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] || 
+                       request.headers.get('x-real-ip') ||
+                       'unknown';
+      
+      // Rate limiting per IP to prevent flooding with different references
+      if (checkRateLimit(`webhook:ip:${clientIp}`, 20, 60000)) { // Max 20 requests per minute per IP
+        console.error('Rate limit exceeded for IP:', clientIp);
+        return rateLimitResponse(60);
+      }
+      
       // Validate payment reference
       let safeReference: string;
       try {
@@ -289,7 +300,7 @@ export async function POST(request: NextRequest) {
       }
       
       // Rate limiting per reference to prevent replay attacks
-      if (checkRateLimit(`webhook:${safeReference}`, 5, 300000)) { // Max 5 attempts per 5 minutes
+      if (checkRateLimit(`webhook:ref:${safeReference}`, 5, 300000)) { // Max 5 attempts per 5 minutes per reference
         console.error('Rate limit exceeded for reference:', safeReference);
         return rateLimitResponse(300);
       }
@@ -304,16 +315,29 @@ export async function POST(request: NextRequest) {
       // Extract and validate payment metadata
       const rawMetadata = extractPaymentMetadata(event);
       
+      // Check for required fields first
+      if (!rawMetadata.username || !rawMetadata.srvid) {
+        console.error('Missing required metadata fields:', { 
+          hasUsername: !!rawMetadata.username, 
+          hasSrvid: !!rawMetadata.srvid 
+        });
+        return NextResponse.json({ 
+          error: 'Missing required metadata fields (username and srvid required)' 
+        }, { status: 400 });
+      }
+      
       // Validate all metadata fields
-      let username: string, srvid: number, timeunitexp: number, trafficunitcomb: number;
+      let username: string, srvid: number, timeunitexp: number, trafficunitcomb: number, limitcomb: number;
       try {
         username = sanitizeUsername(rawMetadata.username);
         srvid = validateServicePlanId(rawMetadata.srvid);
         timeunitexp = validateDays(rawMetadata.timeunitexp);
         trafficunitcomb = validateTraffic(rawMetadata.trafficunitcomb);
+        limitcomb = validateTraffic(rawMetadata.limitcomb); // Also validate limitcomb
       } catch (error) {
-        console.error('Invalid metadata values:', error);
-        return NextResponse.json({ error: `Invalid metadata: ${error instanceof Error ? error.message : 'unknown error'}` }, { status: 400 });
+        const errorMessage = error instanceof Error ? error.message : 'unknown error';
+        console.error('Invalid metadata values:', errorMessage);
+        return NextResponse.json({ error: `Invalid metadata: ${errorMessage}` }, { status: 400 });
       }
 
       try {
@@ -354,7 +378,7 @@ export async function POST(request: NextRequest) {
           
           const preliminaryTransaction = {
             username: username,
-            service_plan_id: parseInt(srvid) || 0,
+            service_plan_id: srvid, // Already validated as number
             service_plan_name: `Service Plan ${srvid}`,
             amount_paid: paymentAmount,
             commission_rate: 0, // Will be updated later

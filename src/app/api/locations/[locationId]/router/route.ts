@@ -31,8 +31,7 @@ export async function GET(
     // Remove password field before returning
     const safeConfig = {
       ...config,
-      password: '***REDACTED***', // Hide password
-      password_set: !!config.password // Indicate if password exists
+      password: '***REDACTED***' // Hide password for security
     }
 
     return NextResponse.json({
@@ -40,7 +39,8 @@ export async function GET(
       data: safeConfig
     })
   } catch (error) {
-    console.error('Error in GET /api/locations/[locationId]/router:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    console.error('Error in GET /api/locations/[locationId]/router:', errorMessage)
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }
@@ -68,8 +68,9 @@ export async function POST(
       if (body.api_port) validatePort(body.api_port);
       sanitizeRouterPassword(body.password);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Invalid input';
       return NextResponse.json(
-        { success: false, error: `Validation error: ${error instanceof Error ? error.message : 'Invalid input'}` },
+        { success: false, error: `Validation error: ${errorMessage}` },
         { status: 400 }
       );
     }
@@ -77,7 +78,7 @@ export async function POST(
     const config = await createRouterConfig(locationId, {
       host: body.host,
       username: body.username,
-      password: body.password, // Will be encrypted by database layer in future update
+      password: body.password, // Stored in plain text currently; encryption available in security.ts
       port: body.port,
       api_port: body.api_port,
       connection_type: body.connection_type
@@ -94,7 +95,8 @@ export async function POST(
       data: safeConfig
     })
   } catch (error) {
-    console.error('Error in POST /api/locations/[locationId]/router:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    console.error('Error in POST /api/locations/[locationId]/router:', errorMessage)
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }
@@ -122,8 +124,9 @@ export async function PUT(
       if (body.api_port) validatePort(body.api_port);
       if (body.password) sanitizeRouterPassword(body.password);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Invalid input';
       return NextResponse.json(
-        { success: false, error: `Validation error: ${error instanceof Error ? error.message : 'Invalid input'}` },
+        { success: false, error: `Validation error: ${errorMessage}` },
         { status: 400 }
       );
     }
@@ -131,7 +134,7 @@ export async function PUT(
     const config = await updateRouterConfig(locationId, {
       host: body.host,
       username: body.username,
-      password: body.password, // Will be encrypted by database layer in future update
+      password: body.password, // Stored in plain text currently; encryption available in security.ts
       port: body.port,
       api_port: body.api_port,
       connection_type: body.connection_type
@@ -148,7 +151,8 @@ export async function PUT(
       data: safeConfig
     })
   } catch (error) {
-    console.error('Error in PUT /api/locations/[locationId]/router:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    console.error('Error in PUT /api/locations/[locationId]/router:', errorMessage)
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

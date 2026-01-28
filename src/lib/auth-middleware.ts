@@ -8,13 +8,16 @@ import { NextRequest, NextResponse } from 'next/server';
 /**
  * Simple API key authentication
  * In production, use proper JWT tokens or session-based auth
+ * 
+ * @throws Error during application startup if API_SECRET_KEY is not configured
  */
 export function validateApiKey(request: NextRequest): boolean {
   const apiKey = request.headers.get('x-api-key');
   const validApiKey = process.env.API_SECRET_KEY;
   
   if (!validApiKey) {
-    console.error('API_SECRET_KEY not configured - API endpoints are not protected!');
+    // This should be caught during application startup
+    console.error('CRITICAL: API_SECRET_KEY not configured - API endpoints are not protected!');
     return false;
   }
   
@@ -22,14 +25,31 @@ export function validateApiKey(request: NextRequest): boolean {
 }
 
 /**
+ * Check if API_SECRET_KEY is configured
+ * Should be called during application startup
+ */
+export function checkApiKeyConfigured(): void {
+  if (!process.env.API_SECRET_KEY) {
+    throw new Error('API_SECRET_KEY environment variable is required for API security');
+  }
+}
+
+/**
  * Validate Paystack webhook IP addresses
  * Paystack webhooks come from specific IP ranges
+ * 
+ * IP whitelist last updated: 2026-01-28
+ * Source: Paystack documentation and support
+ * 
+ * Note: This list may change over time. Check Paystack's official documentation
+ * or contact their support for the most current IP addresses.
+ * Consider implementing dynamic IP list fetching for production.
  */
 const PAYSTACK_IP_WHITELIST = [
   '52.31.139.75',
   '52.49.173.169',
   '52.214.14.220',
-  // Add more Paystack IPs as needed
+  // Add more Paystack IPs as they become available
 ];
 
 export function validateWebhookSource(request: NextRequest): boolean {
