@@ -52,14 +52,25 @@ export function encryptPassword(password: string): string {
 
 /**
  * Decrypt sensitive data
+ * @throws Error if encrypted data is malformed or decryption fails
  */
 export function decryptPassword(encryptedData: string): string {
   const key = getEncryptionKey();
+  
+  // Validate minimum length
+  const minLength = (IV_LENGTH + AUTH_TAG_LENGTH) * 2; // Each byte = 2 hex chars
+  if (encryptedData.length < minLength) {
+    throw new Error(`Invalid encrypted data: too short (minimum ${minLength} characters required)`);
+  }
   
   // Extract iv, authTag, and encrypted data
   const ivHex = encryptedData.slice(0, IV_LENGTH * 2);
   const authTagHex = encryptedData.slice(IV_LENGTH * 2, (IV_LENGTH + AUTH_TAG_LENGTH) * 2);
   const encryptedHex = encryptedData.slice((IV_LENGTH + AUTH_TAG_LENGTH) * 2);
+  
+  if (encryptedHex.length === 0) {
+    throw new Error('Invalid encrypted data: no encrypted content');
+  }
   
   const iv = Buffer.from(ivHex, 'hex');
   const authTag = Buffer.from(authTagHex, 'hex');
@@ -153,6 +164,8 @@ export function validateTraffic(traffic: unknown): number {
 
 /**
  * Validate IP address format
+ * Currently supports IPv4 only
+ * TODO: Add IPv6 support for modern network configurations
  */
 export function validateIpAddress(ip: string): string {
   if (!ip || typeof ip !== 'string') {
@@ -162,7 +175,7 @@ export function validateIpAddress(ip: string): string {
   // IPv4 validation
   const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
   if (!ipv4Regex.test(ip)) {
-    throw new Error('Invalid IP address format');
+    throw new Error('Invalid IP address format (IPv4 expected)');
   }
   
   // Validate each octet
@@ -286,9 +299,33 @@ export function validateUrl(url: string): string {
 
 /**
  * Rate limiting store (in-memory for simple implementation)
- * In production, use Redis or similar distributed cache
+ * 
+ * WARNING: This in-memory implementation is ONLY suitable for single-instance deployments.
+ * For production environments with multiple instances or load balancing, you MUST use
+ * a distributed cache like Redis or Memcached to share rate limit state across instances.
+ * 
+ * Example Redis implementation:
+ *   import { Redis } from 'ioredis';
+ *   const redis = new Redis(process.env.REDIS_URL);
+ *   // Use redis.incr(), redis.expire() for rate limiting
  */
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+
+// Cleanup interval - runs every 5 minutes to prevent memory leaks
+let cleanupInterval: NodeJS.Timeout | null = null;
+
+/**
+ * Initialize rate limit cleanup
+ * Should be called once during application startup
+ */
+export function initRateLimitCleanup(): void {
+  if (cleanupInterval) return; // Already initialized
+  
+  // Run cleanup every 5 minutes
+  cleanupInterval = setInterval(() => {
+    cleanupRateLimits();
+  }, 5 * 60 * 1000);
+}
 
 /**
  * Check rate limit for a given key
@@ -307,6 +344,12 @@ export function checkRateLimit(key: string, maxRequests: number = 10, windowMs: 
       count: 1,
       resetTime: now + windowMs
     });
+    
+    // Automatic cleanup if store gets too large
+    if (rateLimitStore.size > 10000) {
+      cleanupRateLimits();
+    }
+    
     return false;
   }
   
@@ -319,34 +362,51 @@ export function checkRateLimit(key: string, maxRequests: number = 10, windowMs: 
 }
 
 /**
- * Clean up expired rate limit entries (call periodically)
+ * Clean up expired rate limit entries
+ * Called automatically every 5 minutes via initRateLimitCleanup()
+ * Can also be called manually if needed
  */
 export function cleanupRateLimits(): void {
   const now = Date.now();
+  let cleaned = 0;
+  
   for (const [key, record] of rateLimitStore.entries()) {
     if (record.resetTime < now) {
       rateLimitStore.delete(key);
+      cleaned++;
     }
+  }
+  
+  if (cleaned > 0) {
+    console.log(`[RateLimit] Cleaned up ${cleaned} expired entries. Store size: ${rateLimitStore.size}`);
   }
 }
 
+// Initialize cleanup on module load
+initRateLimitCleanup();
+
 /**
  * Validate payment reference format
+ * Returns the validated reference unchanged
  */
 export function validatePaystackReference(reference: string): string {
   if (!reference || typeof reference !== 'string') {
     throw new Error('Invalid payment reference: must be a non-empty string');
   }
   
-  // Paystack references are typically alphanumeric with underscores/hyphens
-  const sanitized = reference.replace(/[^a-zA-Z0-9_-]/g, '');
-  
-  if (sanitized.length === 0) {
-    throw new Error('Invalid payment reference: contains only invalid characters');
+  if (reference.length === 0) {
+    throw new Error('Invalid payment reference: empty string');
   }
   
-  if (sanitized !== reference) {
+  // Paystack references are typically alphanumeric with underscores/hyphens
+  // Check for any dangerous characters that shouldn't be in a payment reference
+  const dangerousPattern = /[<>'";&|`$(){}[\]\\]/;
+  if (dangerousPattern.test(reference)) {
     throw new Error('Invalid payment reference: contains forbidden characters');
+  }
+  
+  if (reference.length > 255) {
+    throw new Error('Invalid payment reference: too long (max 255 characters)');
   }
   
   return reference;
