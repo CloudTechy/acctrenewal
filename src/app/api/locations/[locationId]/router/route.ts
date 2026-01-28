@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { 
   getRouterConfig, 
   createRouterConfig, 
@@ -8,12 +8,12 @@ import { validateApiKey, unauthorizedResponse } from '@/lib/auth-middleware'
 import { validateIpAddress, validatePort, sanitizeRouterPassword } from '@/lib/security'
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ locationId: string }> }
 ) {
   try {
     // Require API key authentication
-    if (!validateApiKey(request as any)) {
+    if (!validateApiKey(request)) {
       return unauthorizedResponse('API key required to access router configuration');
     }
 
@@ -49,12 +49,12 @@ export async function GET(
 }
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ locationId: string }> }
 ) {
   try {
     // Require API key authentication
-    if (!validateApiKey(request as any)) {
+    if (!validateApiKey(request)) {
       return unauthorizedResponse('API key required to create router configuration');
     }
 
@@ -103,12 +103,12 @@ export async function POST(
 }
 
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ locationId: string }> }
 ) {
   try {
     // Require API key authentication
-    if (!validateApiKey(request as any)) {
+    if (!validateApiKey(request)) {
       return unauthorizedResponse('API key required to update router configuration');
     }
 
