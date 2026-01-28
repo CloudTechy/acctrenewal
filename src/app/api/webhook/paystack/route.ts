@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createRenewalTransaction, getCustomerByUsername, createOrUpdateCustomer, getAccountOwnerByUsername } from '@/lib/database';
 import { supabaseAdmin } from '@/lib/supabase';
+import { 
+  sanitizeUsername, 
+  validateServicePlanId, 
+  validateDays, 
+  validateTraffic,
+  checkRateLimit,
+  validatePaystackReference,
+  validateMetadata
+} from '@/lib/security';
+import { rateLimitResponse, validateWebhookSource } from '@/lib/auth-middleware';
 
 // RADIUS API Configuration
 const RADIUS_API_CONFIG = {
@@ -89,13 +99,18 @@ async function addCreditsToUser(
   currentExpiry?: string
 ): Promise<{ success: boolean; newExpiry?: string }> {
   try {
-    console.log(`Adding ${daysToAdd} days to user ${username}`);
+    // Validate and sanitize all inputs
+    const safeUsername = sanitizeUsername(username);
+    const safeDays = validateDays(daysToAdd);
+    const safeTraffic = validateTraffic(trafficToAdd);
+    
+    console.log(`Adding ${safeDays} days to user ${safeUsername}`);
     if (currentExpiry) {
       console.log(`User current expiry: ${currentExpiry}`);
     }
 
     // Calculate the correct number of days to add based on current expiry
-    let actualDaysToAdd = daysToAdd;
+    let actualDaysToAdd = safeDays;
     
     if (currentExpiry) {
       const expiryDate = new Date(currentExpiry);
@@ -105,21 +120,22 @@ async function addCreditsToUser(
       // If account has expired, add the expired days to ensure full service period
       if (expiryDate < today) {
         const expiredDays = Math.ceil((today.getTime() - expiryDate.getTime()) / (1000 * 60 * 60 * 24));
-        actualDaysToAdd = daysToAdd + expiredDays;
-        console.log(`Account expired ${expiredDays} days ago. Adding ${actualDaysToAdd} days total (${daysToAdd} service + ${expiredDays} expired)`);
+        actualDaysToAdd = safeDays + expiredDays;
+        console.log(`Account expired ${expiredDays} days ago. Adding ${actualDaysToAdd} days total (${safeDays} service + ${expiredDays} expired)`);
       } else {
-        console.log(`Account expires in the future. Adding ${daysToAdd} days as planned`);
+        console.log(`Account expires in the future. Adding ${safeDays} days as planned`);
       }
     } else {
-      console.log(`No current expiry provided. Adding ${daysToAdd} days from today`);
+      console.log(`No current expiry provided. Adding ${safeDays} days from today`);
     }
 
-    const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${RADIUS_API_CONFIG.apiuser}&apipass=${RADIUS_API_CONFIG.apipass}&q=add_credits&username=${encodeURIComponent(username)}&dlbytes=0&ulbytes=0&totalbytes=${trafficToAdd}&expiry=${actualDaysToAdd}&unit=DAY&onlinetime=0`;
+    // Build URL with validated parameters - all numeric values are now validated integers
+    const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${encodeURIComponent(RADIUS_API_CONFIG.apiuser)}&apipass=${encodeURIComponent(RADIUS_API_CONFIG.apipass)}&q=add_credits&username=${encodeURIComponent(safeUsername)}&dlbytes=0&ulbytes=0&totalbytes=${safeTraffic}&expiry=${actualDaysToAdd}&unit=DAY&onlinetime=0`;
 
-    console.log('Adding credits to user via webhook:', username);
-    console.log('- Service plan days:', daysToAdd);
+    console.log('Adding credits to user via webhook:', safeUsername);
+    console.log('- Service plan days:', safeDays);
     console.log('- Actual days to add:', actualDaysToAdd);
-    console.log('- Traffic to add (bytes):', trafficToAdd);
+    console.log('- Traffic to add (bytes):', safeTraffic);
 
     const response = await fetch(url, {
       method: 'GET',
@@ -222,6 +238,12 @@ function extractPaymentMetadata(event: PaystackWebhookEvent) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Validate webhook source IP (if enabled)
+    if (!validateWebhookSource(request)) {
+      console.error('Webhook request from unauthorized source');
+      return NextResponse.json({ error: 'Unauthorized source' }, { status: 403 });
+    }
+
     // Get raw body for signature verification
     const body = await request.text();
     const signature = request.headers.get('x-paystack-signature');
@@ -258,19 +280,41 @@ export async function POST(request: NextRequest) {
     if (event.event === 'charge.success') {
       const { reference } = event.data;
       
+      // Validate payment reference
+      let safeReference: string;
+      try {
+        safeReference = validatePaystackReference(reference);
+      } catch (error) {
+        console.error('Invalid payment reference:', error);
+        return NextResponse.json({ error: 'Invalid payment reference' }, { status: 400 });
+      }
+      
+      // Rate limiting per reference to prevent replay attacks
+      if (checkRateLimit(`webhook:${safeReference}`, 5, 300000)) { // Max 5 attempts per 5 minutes
+        console.error('Rate limit exceeded for reference:', safeReference);
+        return rateLimitResponse(300);
+      }
+      
       // Check if this transaction has already been processed (idempotency check)
-      const existingTransaction = await checkExistingTransaction(reference);
+      const existingTransaction = await checkExistingTransaction(safeReference);
       if (existingTransaction) {
-        console.log('Transaction already processed:', reference);
+        console.log('Transaction already processed:', safeReference);
         return NextResponse.json({ message: 'Already processed' }, { status: 200 });
       }
 
-      // Extract payment metadata
-      const { username, srvid, timeunitexp, trafficunitcomb, limitcomb } = extractPaymentMetadata(event);
-
-      if (!username || !srvid) {
-        console.error('Missing required metadata:', { username, srvid });
-        return NextResponse.json({ error: 'Missing metadata' }, { status: 400 });
+      // Extract and validate payment metadata
+      const rawMetadata = extractPaymentMetadata(event);
+      
+      // Validate all metadata fields
+      let username: string, srvid: number, timeunitexp: number, trafficunitcomb: number;
+      try {
+        username = sanitizeUsername(rawMetadata.username);
+        srvid = validateServicePlanId(rawMetadata.srvid);
+        timeunitexp = validateDays(rawMetadata.timeunitexp);
+        trafficunitcomb = validateTraffic(rawMetadata.trafficunitcomb);
+      } catch (error) {
+        console.error('Invalid metadata values:', error);
+        return NextResponse.json({ error: `Invalid metadata: ${error instanceof Error ? error.message : 'unknown error'}` }, { status: 400 });
       }
 
       try {

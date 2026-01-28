@@ -1,4 +1,5 @@
 // Router Configuration Utilities for MikroTik Hotspot Setup
+import { sanitizeUsername, sanitizeRouterPassword, sanitizeHostname, validateCidr, validateIpAddress } from './security';
 
 export interface NetworkConfig {
   // Basic Network Settings
@@ -401,16 +402,17 @@ export class MikroTikConfigurator {
     }
 
     // Step 1: Create hotspot profile
+    const safeHotspotProfile = sanitizeHostname(config.hotspotProfile);
     steps.push({
       id: 'hotspot-profile',
       title: 'Create Hotspot Profile',
-      description: `Creating hotspot profile: ${config.hotspotProfile}`,
-      commands: [`/ip hotspot profile add name=${config.hotspotProfile} html-directory=hotspot login-by=username,http-chap use-radius=no dns-name=phsweb.local`]
+      description: `Creating hotspot profile: ${safeHotspotProfile}`,
+      commands: [`/ip hotspot profile add name=${safeHotspotProfile} html-directory=hotspot login-by=username,http-chap use-radius=no dns-name=phsweb.local`]
     });
 
     try {
       await this.executeCommand('/ip/hotspot/profile', 'POST', {
-        name: config.hotspotProfile,
+        name: safeHotspotProfile,
         'html-directory': 'hotspot',
         'login-by': 'username,http-chap',
         'use-radius': 'no',
@@ -442,19 +444,20 @@ export class MikroTikConfigurator {
     }
 
     // Step 3: Create hotspot server
+    const safeHotspotName = sanitizeHostname(config.hotspotName);
     steps.push({
       id: 'hotspot-server',
       title: 'Create Hotspot Server',
-      description: `Creating hotspot server: ${config.hotspotName}`,
-      commands: [`/ip hotspot add name=${config.hotspotName} interface=bridge-lan address-pool=dhcp-pool profile=${config.hotspotProfile} disabled=no`]
+      description: `Creating hotspot server: ${safeHotspotName}`,
+      commands: [`/ip hotspot add name=${safeHotspotName} interface=bridge-lan address-pool=dhcp-pool profile=${safeHotspotProfile} disabled=no`]
     });
 
     try {
       await this.executeCommand('/ip/hotspot', 'POST', {
-        name: config.hotspotName,
+        name: safeHotspotName,
         interface: 'bridge-lan',
         'address-pool': 'dhcp-pool',
-        profile: config.hotspotProfile,
+        profile: safeHotspotProfile,
         disabled: 'no'
       });
     } catch (error) {
@@ -462,18 +465,24 @@ export class MikroTikConfigurator {
     }
 
     // Step 4: Configure hotspot network
+    // Validate network configuration inputs
+    const safeLanNetwork = validateCidr(config.lanNetwork);
+    const safeLanGateway = validateIpAddress(config.lanGateway);
+    const safePrimaryDns = validateIpAddress(config.primaryDns);
+    const safeSecondaryDns = validateIpAddress(config.secondaryDns);
+    
     steps.push({
       id: 'hotspot-network',
       title: 'Configure Hotspot Network',
       description: 'Setting up hotspot network configuration',
-      commands: [`/ip hotspot network add address=${config.lanNetwork} gateway=${config.lanGateway} dns-server=${config.primaryDns},${config.secondaryDns}`]
+      commands: [`/ip hotspot network add address=${safeLanNetwork} gateway=${safeLanGateway} dns-server=${safePrimaryDns},${safeSecondaryDns}`]
     });
 
     try {
       await this.executeCommand('/ip/hotspot/network', 'POST', {
-        address: config.lanNetwork,
-        gateway: config.lanGateway,
-        'dns-server': `${config.primaryDns},${config.secondaryDns}`
+        address: safeLanNetwork,
+        gateway: safeLanGateway,
+        'dns-server': `${safePrimaryDns},${safeSecondaryDns}`
       });
     } catch (error) {
       console.warn('Hotspot network creation failed (may already exist):', error);
@@ -532,16 +541,23 @@ export class MikroTikConfigurator {
       id: 'default-users',
       title: 'Create Default Users',
       description: `Creating ${config.defaultUsers.length} default users`,
-      commands: config.defaultUsers.map(user => 
-        `/ip hotspot user add name=${user.username} password=${user.password} profile=${user.profile}`
-      )
+      commands: config.defaultUsers.map(user => {
+        // Validate and sanitize user inputs to prevent command injection
+        const safeUsername = sanitizeUsername(user.username);
+        const safePassword = sanitizeRouterPassword(user.password);
+        return `/ip hotspot user add name=${safeUsername} password=${safePassword} profile=${user.profile}`;
+      })
     });
 
     for (const user of config.defaultUsers) {
       try {
+        // Validate before sending to API
+        const safeUsername = sanitizeUsername(user.username);
+        const safePassword = sanitizeRouterPassword(user.password);
+        
         await this.executeCommand('/ip/hotspot/user', 'POST', {
-          name: user.username,
-          password: user.password,
+          name: safeUsername,
+          password: safePassword,
           profile: user.profile
         });
       } catch (error) {
