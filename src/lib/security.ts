@@ -279,7 +279,7 @@ export function validateUrl(url: string): string {
     }
     
     return url;
-  } catch (error) {
+  } catch {
     throw new Error('Invalid URL format');
   }
 }

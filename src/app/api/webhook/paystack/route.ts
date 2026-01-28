@@ -8,8 +8,7 @@ import {
   validateDays, 
   validateTraffic,
   checkRateLimit,
-  validatePaystackReference,
-  validateMetadata
+  validatePaystackReference
 } from '@/lib/security';
 import { rateLimitResponse, validateWebhookSource } from '@/lib/auth-middleware';
 
