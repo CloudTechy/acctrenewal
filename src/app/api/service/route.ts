@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Server-side API configuration (hidden from frontend)
 const RADIUS_API_CONFIG = {
-  baseUrl: process.env.RADIUS_API_URL || 'http://161.35.46.125/radiusmanager/api/sysapi.php',
+  baseUrl: process.env.RADIUS_API_URL || 'http://165.227.177.208/radiusmanager/api/',
   apiuser: process.env.RADIUS_API_USER || 'api',
   apipass: process.env.RADIUS_API_PASS || 'api123'
 };

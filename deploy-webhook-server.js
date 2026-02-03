@@ -85,6 +85,11 @@ const handleDeployment = async (data) => {
       throw new Error(`Directory not found: ${APP_DIR}`);
     }
 
+    // Step 1.5: Configure Git to use HTTPS instead of SSH (if needed)
+    log(`🔧 Configuring Git for HTTPS...`);
+    await executeCommand(`git config --local url."https://github.com/".insteadOf git@github.com:`, APP_DIR).catch(() => {});
+    await executeCommand(`git config --local url."https://".insteadOf git://`, APP_DIR).catch(() => {});
+
     // Step 2: Pull latest code
     log(`📥 Pulling latest code from ${repository}...`);
     await executeCommand(`git pull origin ${branch}`, APP_DIR);

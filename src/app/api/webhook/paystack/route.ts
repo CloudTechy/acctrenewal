@@ -14,7 +14,7 @@ import { rateLimitResponse, validateWebhookSource } from '@/lib/auth-middleware'
 
 // RADIUS API Configuration
 const RADIUS_API_CONFIG = {
-  baseUrl: process.env.RADIUS_API_URL || 'https://portal1.phsweb.ng/api/sysapi.php',
+  baseUrl: process.env.RADIUS_API_URL || 'http://165.227.177.208/radiusmanager/api/',
   apiuser: process.env.RADIUS_API_USER || 'phsweb',
   apipass: process.env.RADIUS_API_PASS || '',
 };
