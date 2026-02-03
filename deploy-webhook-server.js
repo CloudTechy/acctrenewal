@@ -112,9 +112,15 @@ const handleDeployment = async (data) => {
       await executeCommand(`cp ${COMPOSE_FILE} ${backupPath}`, APP_DIR);
     }
 
-    // Step 6: Stop old containers
+    // Step 6: Force remove existing containers to avoid conflicts
+    log(`🧹 Removing existing containers...`);
+    await executeCommand(`docker rm -f acctrenewal-app acctrenewal-webhook 2>/dev/null || true`, APP_DIR).catch(
+      () => log(`No existing containers to remove`)
+    );
+
+    // Step 6b: Stop old containers (with profile support)
     log(`⛔ Stopping old containers...`);
-    await executeCommand(`${COMPOSE_CMD} -f ${COMPOSE_FILE} down`, APP_DIR).catch(
+    await executeCommand(`${COMPOSE_CMD} --profile vps -f ${COMPOSE_FILE} down`, APP_DIR).catch(
       () => log(`No containers to stop`)
     );
 
