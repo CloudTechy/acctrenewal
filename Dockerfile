@@ -11,7 +11,7 @@ RUN apk add --no-cache libc6-compat
 COPY package.json package-lock.json* ./
 
 # Install ALL dependencies once (needed for the build stage)
-RUN npm ci && npm cache clean --force
+RUN npm install && npm cache clean --force
 
 # ===================================
 # Stage 2: Build Stage
