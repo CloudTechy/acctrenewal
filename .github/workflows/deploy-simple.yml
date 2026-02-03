@@ -79,11 +79,14 @@ jobs:
         if: |
           github.event_name == 'push' && 
           github.ref_type == 'branch' &&
-          secrets.VPS_WEBHOOK_URL != ''
+          env.VPS_WEBHOOK_URL != ''
+        env:
+          VPS_WEBHOOK_URL: ${{ secrets.VPS_WEBHOOK_URL }}
+          VPS_WEBHOOK_SECRET: ${{ secrets.VPS_WEBHOOK_SECRET }}
         run: |
           BRANCH=${{ github.ref_name }}
-          WEBHOOK_URL="${{ secrets.VPS_WEBHOOK_URL }}"
-          WEBHOOK_SECRET="${{ secrets.VPS_WEBHOOK_SECRET }}"
+          WEBHOOK_URL="$VPS_WEBHOOK_URL"
+          WEBHOOK_SECRET="$VPS_WEBHOOK_SECRET"
           
           if [ -z "$WEBHOOK_URL" ] || [ -z "$WEBHOOK_SECRET" ]; then
             echo "⚠️  Warning: VPS_WEBHOOK_URL or VPS_WEBHOOK_SECRET not configured, skipping deployment"
@@ -129,8 +132,11 @@ jobs:
         continue-on-error: true
 
       - name: Slack notification (success)
-        if: success() && secrets.SLACK_WEBHOOK_URL != ''
+        if: success() && env.SLACK_WEBHOOK_URL != ''
         uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         with:
           payload: |
             {
@@ -145,14 +151,14 @@ jobs:
                 }
               ]
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         continue-on-error: true
 
       - name: Slack notification (failure)
-        if: failure() && secrets.SLACK_WEBHOOK_URL != ''
+        if: failure() && env.SLACK_WEBHOOK_URL != ''
         uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         with:
           payload: |
             {
@@ -167,7 +173,4 @@ jobs:
                 }
               ]
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         continue-on-error: true
