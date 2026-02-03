@@ -9,6 +9,10 @@ services:
     ports:
       - "3000:3000"
     
+    # Load environment variables from .env file
+    env_file:
+      - .env
+    
     # Mount volume for logs (optional)
     volumes:
       - ./logs:/app/logs
