@@ -14,7 +14,7 @@ import { rateLimitResponse, validateWebhookSource } from '@/lib/auth-middleware'
 
 // RADIUS API Configuration
 const RADIUS_API_CONFIG = {
-  baseUrl: process.env.RADIUS_API_URL || 'http://165.227.177.208/radiusmanager/api/',
+  baseUrl: process.env.RADIUS_API_URL || 'http://165.227.177.208/radiusmanager/api/sysapi.php',
   apiuser: process.env.RADIUS_API_USER || 'phsweb',
   apipass: process.env.RADIUS_API_PASS || '',
 };
@@ -128,8 +128,9 @@ async function addCreditsToUser(
       console.log(`No current expiry provided. Adding ${safeDays} days from today`);
     }
 
-    // Build URL with validated parameters - all numeric values are now validated integers
-    const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${encodeURIComponent(RADIUS_API_CONFIG.apiuser)}&apipass=${encodeURIComponent(RADIUS_API_CONFIG.apipass)}&q=add_credits&username=${encodeURIComponent(safeUsername)}&dlbytes=0&ulbytes=0&totalbytes=${safeTraffic}&expiry=${actualDaysToAdd}&unit=DAY&onlinetime=0`;
+    // Build URL with validated parameters matching Postman documentation
+    // According to Postman: q=add_credits&username=user&expiry=1&unit=day
+    const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${encodeURIComponent(RADIUS_API_CONFIG.apiuser)}&apipass=${encodeURIComponent(RADIUS_API_CONFIG.apipass)}&q=add_credits&username=${encodeURIComponent(safeUsername)}&expiry=${actualDaysToAdd}&unit=day`;
 
     console.log('Adding credits to user via webhook:', safeUsername);
     console.log('- Service plan days:', safeDays);
