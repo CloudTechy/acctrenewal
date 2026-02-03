@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 const TermsPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-      {/* Header */}
+      {/* Header section*/}
       <header className="border-b border-gray-700/50 bg-gray-900/90 backdrop-blur-lg">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
