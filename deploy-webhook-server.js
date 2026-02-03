@@ -18,21 +18,21 @@ const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-// Configuration
-const PORT = process.env.PORT || 3001;
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'your-webhook-secret';
-const APP_DIR = path.expand(process.env.APP_DIR || '~/acctrenewal');
-const COMPOSE_FILE = process.env.DOCKER_COMPOSE_FILE || 'docker-compose.yml';
-const COMPOSE_CMD = process.env.DOCKER_COMPOSE_CMD || 'docker compose';
-const LOG_FILE = path.join(APP_DIR, 'deploy.log');
-
 // Utility: expand ~ in paths
-path.expand = (filePath) => {
+const expandHome = (filePath) => {
   if (filePath.startsWith('~')) {
-    return path.join(process.env.HOME, filePath.slice(1));
+    return path.join(process.env.HOME || '', filePath.slice(1));
   }
   return filePath;
 };
+
+// Configuration
+const PORT = process.env.PORT || 3001;
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'your-webhook-secret';
+const APP_DIR = expandHome(process.env.APP_DIR || '~/acctrenewal');
+const COMPOSE_FILE = process.env.DOCKER_COMPOSE_FILE || 'docker-compose.yml';
+const COMPOSE_CMD = process.env.DOCKER_COMPOSE_CMD || 'docker compose';
+const LOG_FILE = path.join(APP_DIR, 'deploy.log');
 
 // Utility: log with timestamp
 const log = (message) => {
