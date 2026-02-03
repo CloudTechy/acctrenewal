@@ -96,45 +96,30 @@ curl http://localhost:3000/api/health
 docker-compose down
 ```
 
-## 🔧 Step 2: Setup Webhook Server on VPS
+## 🔧 Step 2: Setup Webhook Server on VPS (Docker-only)
 
-### 2.1 Install PM2 (Process Manager)
-```bash
-npm install -g pm2
-```
-
-### 2.2 Copy Webhook Server
-```bash
-# Already in ~/acctrenewal, the deploy-webhook-server.js should be there
-# If not, copy from your local machine:
-scp deploy-webhook-server.js root@148.230.112.244:~/acctrenewal/
-```
-
-### 2.3 Create .env for Webhook Server
+### 2.1 Create .env for Webhook Server
 ```bash
 cat > ~/acctrenewal/.webhook.env << 'EOF'
 PORT=3001
 WEBHOOK_SECRET=your-super-secret-webhook-key-change-me-now
 APP_DIR=~/acctrenewal
 DOCKER_COMPOSE_FILE=docker-compose.yml
+DOCKER_COMPOSE_CMD=docker compose
 EOF
 ```
 
 **⚠️ IMPORTANT**: Change `your-super-secret-webhook-key-change-me-now` to a random string. You'll need this for GitHub Secrets.
 
-### 2.4 Start Webhook Server with PM2
+### 2.2 Start Webhook Server with Docker
 ```bash
 cd ~/acctrenewal
 
-# Start the webhook server
-pm2 start deploy-webhook-server.js --name "acctrenewal-webhook" --env .webhook.env
-
-# Make it restart on reboot
-pm2 startup
-pm2 save
+# Build webhook image and start it (profile: vps)
+docker compose --profile vps up -d --build
 
 # Check status
-pm2 status
+docker compose ps
 ```
 
 ### 2.5 Configure Firewall
@@ -184,7 +169,7 @@ nginx -t
 systemctl restart nginx
 ```
 
-### 2.7 Test Webhook Locally
+### 2.6 Test Webhook Locally
 ```bash
 # Check if webhook server is responding
 curl http://localhost:3001/health
@@ -210,7 +195,7 @@ Go to your GitHub repository:
 1. Settings → Secrets and variables → Actions
 2. Create new secret: `DOCKER_USERNAME` = your Docker Hub username
 3. Create new secret: `DOCKER_PASSWORD` = your Docker Hub PAT
-4. Create new secret: `VPS_WEBHOOK_URL` = `http://148.230.112.244/webhook/deploy` (or port 3001 if no Nginx)
+4. Create new secret: `VPS_WEBHOOK_URL` = `http://148.230.112.244:3001/deploy` (or `/webhook/deploy` if using Nginx)
 5. Create new secret: `VPS_WEBHOOK_SECRET` = the secret from .webhook.env
 6. Create new secret: `SLACK_WEBHOOK_URL` = (optional) for Slack notifications
 

@@ -23,6 +23,7 @@ const PORT = process.env.PORT || 3001;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'your-webhook-secret';
 const APP_DIR = path.expand(process.env.APP_DIR || '~/acctrenewal');
 const COMPOSE_FILE = process.env.DOCKER_COMPOSE_FILE || 'docker-compose.yml';
+const COMPOSE_CMD = process.env.DOCKER_COMPOSE_CMD || 'docker compose';
 const LOG_FILE = path.join(APP_DIR, 'deploy.log');
 
 // Utility: expand ~ in paths
@@ -108,14 +109,14 @@ const handleDeployment = async (data) => {
 
     // Step 6: Stop old containers
     log(`⛔ Stopping old containers...`);
-    await executeCommand(`docker-compose -f ${COMPOSE_FILE} down`, APP_DIR).catch(
+    await executeCommand(`${COMPOSE_CMD} -f ${COMPOSE_FILE} down`, APP_DIR).catch(
       () => log(`No containers to stop`)
     );
 
     // Step 7: Start new containers
     log(`🚀 Starting new containers with image ${image}...`);
     await executeCommand(
-      `docker-compose -f ${COMPOSE_FILE} up -d`,
+      `${COMPOSE_CMD} -f ${COMPOSE_FILE} up -d`,
       APP_DIR
     );
 
@@ -166,8 +167,8 @@ const handleDeployment = async (data) => {
       if (backups.trim()) {
         const latestBackup = backups.trim();
         await executeCommand(`cp ${latestBackup} ${COMPOSE_FILE}`, APP_DIR);
-        await executeCommand(`docker-compose -f ${COMPOSE_FILE} down`, APP_DIR).catch(() => {});
-        await executeCommand(`docker-compose -f ${COMPOSE_FILE} up -d`, APP_DIR);
+        await executeCommand(`${COMPOSE_CMD} -f ${COMPOSE_FILE} down`, APP_DIR).catch(() => {});
+        await executeCommand(`${COMPOSE_CMD} -f ${COMPOSE_FILE} up -d`, APP_DIR);
         log(`✅ Rollback successful`);
       }
     } catch (rollbackErr) {
