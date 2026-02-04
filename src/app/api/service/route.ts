@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 // Server-side API configuration (hidden from frontend)
 const RADIUS_API_CONFIG = {
   baseUrl: process.env.RADIUS_API_URL || 'http://165.227.177.208/radiusmanager/api/sysapi.php',
-  apiuser: process.env.RADIUS_API_USER || 'api',
-  apipass: process.env.RADIUS_API_PASS || 'api123'
+  apiuser: process.env.RADIUS_API_USER || 'apiconnekt',
+  apipass: process.env.RADIUS_API_PASS || 'C0nNekt123'
 };
 
 export async function POST(request: NextRequest) {
