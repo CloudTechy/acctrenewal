@@ -12,7 +12,7 @@ export async function GET() {
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       environment: process.env.NODE_ENV,
-      version: process.env.npm_package_version || '1.0.1', // Testing auto-deployment
+      version: process.env.npm_package_version || '1.0.3', // Testing automated deployment pipeline
     };
 
     return NextResponse.json(healthStatus, { status: 200 });
