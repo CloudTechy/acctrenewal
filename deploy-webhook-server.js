@@ -132,12 +132,12 @@ const handleDeployment = async (data) => {
 
     // Step 8: Wait for service startup
     log(`⏳ Waiting for service to start...`);
-    await new Promise((resolve) => setTimeout(resolve, 5000));
+    await new Promise((resolve) => setTimeout(resolve, 10000));
 
     // Step 9: Health check
     log(`🏥 Performing health check...`);
     let healthOk = false;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 8; i++) {
       try {
         await executeCommand(
           `curl -f http://localhost:3000/api/health`,
@@ -147,11 +147,11 @@ const handleDeployment = async (data) => {
         log(`✅ Health check passed!`);
         break;
       } catch (err) {
-        if (i < 4) {
-          log(`Health check attempt ${i + 1}/5 failed, retrying in 5s...`);
+        if (i < 7) {
+          log(`Health check attempt ${i + 1}/8 failed, retrying in 5s...`);
           await new Promise((resolve) => setTimeout(resolve, 5000));
         } else {
-          log(`❌ Health check failed after 5 attempts`);
+          log(`❌ Health check failed after 8 attempts`);
         }
       }
     }
