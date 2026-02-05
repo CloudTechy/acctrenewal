@@ -30,8 +30,19 @@ export async function POST(request: NextRequest) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     
-    const data = await response.json();
-    console.log('RADIUS API response:', data);
+    // Get raw text first to debug
+    const responseText = await response.text();
+    console.log('RADIUS API raw response:', responseText.substring(0, 500));
+    
+    let data;
+    try {
+      data = JSON.parse(responseText);
+      console.log('RADIUS API parsed response:', data);
+    } catch (parseError) {
+      console.error('Failed to parse RADIUS response:', parseError);
+      console.error('Raw response:', responseText);
+      throw parseError;
+    }
     
     // Return the RADIUS Manager response
     return NextResponse.json(data);
