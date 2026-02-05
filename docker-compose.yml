@@ -1,6 +1,7 @@
 services:
   # Next.js Application
   acctrenewal-app:
+    image: cloudtechy/acctrenewal:master
     build:
       context: .
       dockerfile: Dockerfile
