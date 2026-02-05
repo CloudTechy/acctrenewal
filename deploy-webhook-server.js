@@ -112,22 +112,21 @@ const handleDeployment = async (data) => {
       await executeCommand(`cp ${COMPOSE_FILE} ${backupPath}`, APP_DIR);
     }
 
-    // Step 6: Force remove existing containers to avoid conflicts
-    log(`🧹 Removing existing containers...`);
-    await executeCommand(`docker rm -f acctrenewal-app acctrenewal-webhook 2>/dev/null || true`, APP_DIR).catch(
-      () => log(`No existing containers to remove`)
+    // Step 6: Stop and remove ONLY the app container (keep webhook running)
+    log(`🧹 Stopping app container...`);
+    await executeCommand(`docker stop acctrenewal-app 2>/dev/null || true`, APP_DIR).catch(
+      () => log(`App container not running`)
+    );
+    
+    log(`🗑️  Removing app container...`);
+    await executeCommand(`docker rm acctrenewal-app 2>/dev/null || true`, APP_DIR).catch(
+      () => log(`No app container to remove`)
     );
 
-    // Step 6b: Stop old containers (with profile support)
-    log(`⛔ Stopping old containers...`);
-    await executeCommand(`${COMPOSE_CMD} --profile vps -f ${COMPOSE_FILE} down`, APP_DIR).catch(
-      () => log(`No containers to stop`)
-    );
-
-    // Step 7: Start new containers
-    log(`🚀 Starting new containers with image ${image}...`);
+    // Step 7: Start new app container (webhook stays running)
+    log(`🚀 Starting new app container with image ${image}...`);
     await executeCommand(
-      `${COMPOSE_CMD} --profile vps -f ${COMPOSE_FILE} up -d`,
+      `${COMPOSE_CMD} -f ${COMPOSE_FILE} up -d acctrenewal-app`,
       APP_DIR
     );
 
