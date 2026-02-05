@@ -49,8 +49,9 @@ export async function POST(request: NextRequest) {
     
   } catch (error) {
     console.error('Error fetching service data:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: 'Failed to fetch service data', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to fetch service data', details: errorMessage },
       { status: 500 }
     );
   }
