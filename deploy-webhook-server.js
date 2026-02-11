@@ -14,7 +14,7 @@
 
 const http = require('http');
 const crypto = require('crypto');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -44,11 +44,11 @@ const log = (message) => {
   });
 };
 
-// Utility: execute shell commands
-const executeCommand = (command, cwd = APP_DIR) => {
+// Utility: execute shell commands safely (using execFile instead of exec)
+const executeCommand = (command, args = [], cwd = APP_DIR) => {
   return new Promise((resolve, reject) => {
-    log(`Executing: ${command}`);
-    exec(command, { cwd }, (error, stdout, stderr) => {
+    log(`Executing: ${command} ${args.join(' ')}`);
+    execFile(command, args, { cwd, shell: false }, (error, stdout, stderr) => {
       if (error) {
         log(`Error: ${error.message}`);
         reject(error);
@@ -74,7 +74,10 @@ const validateSignature = (payload, signature) => {
 
 // Handle deployment
 const handleDeployment = async (data) => {
-  const { branch, image, repository } = data;
+  // SECURITY: Use fixed values to prevent command injection
+  const branch = 'master';
+  const image = 'cloudtechy/acctrenewal:master';
+  
   log(`🚀 Starting deployment for ${branch} branch`);
   
   try {
@@ -87,16 +90,16 @@ const handleDeployment = async (data) => {
 
     // Step 1.5: Configure Git to use HTTPS instead of SSH (if needed)
     log(`🔧 Configuring Git for HTTPS...`);
-    await executeCommand(`git config --local url."https://github.com/".insteadOf git@github.com:`, APP_DIR).catch(() => {});
-    await executeCommand(`git config --local url."https://".insteadOf git://`, APP_DIR).catch(() => {});
+    await executeCommand('git', ['config', '--local', 'url.https://github.com/.insteadOf', 'git@github.com:'], APP_DIR).catch(() => {});
+    await executeCommand('git', ['config', '--local', 'url.https://.insteadOf', 'git://'], APP_DIR).catch(() => {});
 
     // Step 2: Pull latest code
-    log(`📥 Pulling latest code from ${repository}...`);
-    await executeCommand(`git pull origin ${branch}`, APP_DIR);
+    log(`📥 Pulling latest code...`);
+    await executeCommand('git', ['pull', 'origin', branch], APP_DIR);
 
     // Step 3: Pull latest Docker image
     log(`🐳 Pulling Docker image: ${image}...`);
-    await executeCommand(`docker pull ${image}`, APP_DIR);
+    await executeCommand('docker', ['pull', image], APP_DIR);
 
     // Step 4: Load environment variables
     log(`⚙️  Loading environment variables...`);
@@ -106,27 +109,29 @@ const handleDeployment = async (data) => {
 
     // Step 5: Backup current docker-compose.yml
     const composePath = path.join(APP_DIR, COMPOSE_FILE);
-    const backupPath = `${composePath}.backup.$(date +%s)`;
+    const timestamp = Date.now();
+    const backupPath = `${composePath}.backup.${timestamp}`;
     if (fs.existsSync(composePath)) {
       log(`💾 Backing up docker-compose file...`);
-      await executeCommand(`cp ${COMPOSE_FILE} ${backupPath}`, APP_DIR);
+      await executeCommand('cp', [COMPOSE_FILE, backupPath], APP_DIR);
     }
 
     // Step 6: Stop and remove ONLY the app container (keep webhook running)
     log(`🧹 Stopping app container...`);
-    await executeCommand(`docker stop acctrenewal-app 2>/dev/null || true`, APP_DIR).catch(
+    await executeCommand('docker', ['stop', 'acctrenewal-app'], APP_DIR).catch(
       () => log(`App container not running`)
     );
     
     log(`🗑️  Removing app container...`);
-    await executeCommand(`docker rm acctrenewal-app 2>/dev/null || true`, APP_DIR).catch(
+    await executeCommand('docker', ['rm', 'acctrenewal-app'], APP_DIR).catch(
       () => log(`No app container to remove`)
     );
 
     // Step 7: Start new app container (webhook stays running)
     log(`🚀 Starting new app container with image ${image}...`);
     await executeCommand(
-      `${COMPOSE_CMD} -f ${COMPOSE_FILE} up -d acctrenewal-app`,
+      'docker',
+      ['compose', '-f', COMPOSE_FILE, 'up', '-d', 'acctrenewal-app'],
       APP_DIR
     );
 
@@ -140,7 +145,8 @@ const handleDeployment = async (data) => {
     for (let i = 0; i < 8; i++) {
       try {
         await executeCommand(
-          `curl -f http://localhost:3000/api/health`,
+          'curl',
+          ['-f', 'http://localhost:3000/api/health'],
           APP_DIR
         );
         healthOk = true;
@@ -162,7 +168,7 @@ const handleDeployment = async (data) => {
 
     // Step 10: Cleanup
     log(`🧹 Cleaning up old Docker images...`);
-    await executeCommand(`docker image prune -f --filter "until=72h"`, APP_DIR).catch(
+    await executeCommand('docker', ['image', 'prune', '-f', '--filter', 'until=72h'], APP_DIR).catch(
       () => log(`No images to prune`)
     );
 
@@ -173,12 +179,17 @@ const handleDeployment = async (data) => {
     log(`❌ Deployment failed: ${error.message}`);
     log(`🔄 Attempting to restore from backup...`);
     try {
-      const backups = await executeCommand(`ls -t ${COMPOSE_FILE}.backup.* 2>/dev/null | head -1`, APP_DIR);
-      if (backups.trim()) {
-        const latestBackup = backups.trim();
-        await executeCommand(`cp ${latestBackup} ${COMPOSE_FILE}`, APP_DIR);
-        await executeCommand(`${COMPOSE_CMD} -f ${COMPOSE_FILE} down`, APP_DIR).catch(() => {});
-        await executeCommand(`${COMPOSE_CMD} -f ${COMPOSE_FILE} up -d`, APP_DIR);
+      // Find latest backup by listing and sorting
+      const backupFiles = fs.readdirSync(APP_DIR)
+        .filter(f => f.startsWith(`${COMPOSE_FILE}.backup.`))
+        .sort()
+        .reverse();
+      
+      if (backupFiles.length > 0) {
+        const latestBackup = backupFiles[0];
+        await executeCommand('cp', [latestBackup, COMPOSE_FILE], APP_DIR);
+        await executeCommand('docker', ['compose', '-f', COMPOSE_FILE, 'down'], APP_DIR).catch(() => {});
+        await executeCommand('docker', ['compose', '-f', COMPOSE_FILE, 'up', '-d'], APP_DIR);
         log(`✅ Rollback successful`);
       }
     } catch (rollbackErr) {
@@ -217,6 +228,33 @@ const server = http.createServer(async (req, res) => {
 
         // Parse payload
         const data = JSON.parse(body);
+        
+        // SECURITY: Strict allowlist validation
+        if (typeof data !== 'object' || data === null) {
+          log(`❌ Invalid payload: not an object`);
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid payload format' }));
+          return;
+        }
+        
+        // Only allow master branch
+        const allowedBranches = ['master', 'refs/heads/master'];
+        if (!allowedBranches.includes(data.branch)) {
+          log(`❌ Unauthorized branch: ${data.branch}`);
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Unauthorized branch' }));
+          return;
+        }
+        
+        // Only allow specific image
+        const allowedImage = 'cloudtechy/acctrenewal:master';
+        if (data.image && data.image !== allowedImage) {
+          log(`❌ Unauthorized image: ${data.image}`);
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Unauthorized image' }));
+          return;
+        }
+        
         log(`✅ Webhook signature validated for branch: ${data.branch}`);
 
         // Handle deployment asynchronously
