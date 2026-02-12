@@ -93,9 +93,10 @@ const handleDeployment = async (data) => {
     await executeCommand('git', ['config', '--local', 'url.https://github.com/.insteadOf', 'git@github.com:'], APP_DIR).catch(() => {});
     await executeCommand('git', ['config', '--local', 'url.https://.insteadOf', 'git://'], APP_DIR).catch(() => {});
 
-    // Step 2: Pull latest code
+    // Step 2: Pull latest code (force sync to avoid divergent branches)
     log(`📥 Pulling latest code...`);
-    await executeCommand('git', ['pull', 'origin', branch], APP_DIR);
+    await executeCommand('git', ['fetch', 'origin', branch], APP_DIR);
+    await executeCommand('git', ['reset', '--hard', `origin/${branch}`], APP_DIR);
 
     // Step 3: Pull latest Docker image
     log(`🐳 Pulling Docker image: ${image}...`);
@@ -189,6 +190,8 @@ const handleDeployment = async (data) => {
         const latestBackup = backupFiles[0];
         await executeCommand('cp', [latestBackup, COMPOSE_FILE], APP_DIR);
         await executeCommand('docker', ['compose', '-f', COMPOSE_FILE, 'down'], APP_DIR).catch(() => {});
+        // Ensure stale container name does not block rollback
+        await executeCommand('docker', ['rm', '-f', 'acctrenewal-app'], APP_DIR).catch(() => {});
         await executeCommand('docker', ['compose', '-f', COMPOSE_FILE, 'up', '-d'], APP_DIR);
         log(`✅ Rollback successful`);
       }
