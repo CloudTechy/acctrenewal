@@ -132,7 +132,7 @@ const handleDeployment = async (data) => {
     log(`🚀 Starting new app container with image ${image}...`);
     await executeCommand(
       'docker',
-      ['compose', '-f', COMPOSE_FILE, 'up', '-d', 'acctrenewal-app'],
+      ['compose', '-f', COMPOSE_FILE, 'up', '-d', '--no-build', 'acctrenewal-app'],
       APP_DIR
     );
 
@@ -140,26 +140,30 @@ const handleDeployment = async (data) => {
     log(`⏳ Waiting for service to start...`);
     await new Promise((resolve) => setTimeout(resolve, 10000));
 
-    // Step 9: Health check
+    // Step 9: Health check (use container health status)
     log(`🏥 Performing health check...`);
     let healthOk = false;
     for (let i = 0; i < 8; i++) {
       try {
-        await executeCommand(
-          'curl',
-          ['-f', 'http://localhost:3000/api/health'],
+        const healthStatus = await executeCommand(
+          'docker',
+          ['inspect', '-f', '{{.State.Health.Status}}', 'acctrenewal-app'],
           APP_DIR
         );
-        healthOk = true;
-        log(`✅ Health check passed!`);
-        break;
-      } catch (err) {
-        if (i < 7) {
-          log(`Health check attempt ${i + 1}/8 failed, retrying in 5s...`);
-          await new Promise((resolve) => setTimeout(resolve, 5000));
-        } else {
-          log(`❌ Health check failed after 8 attempts`);
+        const status = healthStatus.trim();
+        if (status === 'healthy') {
+          healthOk = true;
+          log(`✅ Health check passed!`);
+          break;
         }
+        log(`Health check status: ${status}, retrying in 5s...`);
+      } catch (err) {
+        log(`Health check attempt ${i + 1}/8 failed, retrying in 5s...`);
+      }
+      if (i < 7) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      } else {
+        log(`❌ Health check failed after 8 attempts`);
       }
     }
 
