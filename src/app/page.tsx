@@ -1,11 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion, Variants } from 'framer-motion';
-import { Search, Menu, X, User, Calendar, CreditCard, Globe } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Search, Calendar, CreditCard, Globe, User } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import Link from 'next/link';
-import { cn } from '@/lib/utils';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 
@@ -365,62 +364,6 @@ const getAccountStatus = (userData: UserData): {
   }
 };
 
-// AnimatedGroup Component
-type AnimatedGroupProps = {
-  children: React.ReactNode;
-  className?: string;
-  variants?: {
-    container?: Variants;
-    item?: Variants;
-  };
-};
-
-const defaultContainerVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-    },
-  },
-};
-
-const defaultItemVariants: Variants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { 
-    opacity: 1, 
-    y: 0,
-    transition: {
-      type: 'spring',
-      bounce: 0.3,
-      duration: 0.8,
-    }
-  },
-};
-
-function AnimatedGroup({
-  children,
-  className,
-  variants,
-}: AnimatedGroupProps) {
-  const containerVariants = variants?.container || defaultContainerVariants;
-  const itemVariants = variants?.item || defaultItemVariants;
-
-  return (
-    <motion.div
-      initial='hidden'
-      animate='visible'
-      variants={containerVariants}
-      className={cn(className)}
-    >
-      {React.Children.map(children, (child, index) => (
-        <motion.div key={index} variants={itemVariants}>
-          {child}
-        </motion.div>
-      ))}
-    </motion.div>
-  );
-}
 
 // User Details Display Component
 interface UserDetailsProps {
@@ -749,184 +692,6 @@ const UserDetails: React.FC<UserDetailsProps> = ({
   );
 };
 
-// Navbar Component
-const Navbar: React.FC<{ onHomeClick?: () => void }> = ({ onHomeClick }) => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  const menuItems = [
-    { name: 'Home', href: '/' },
-    { name: 'Terms', href: '/terms' },
-    { name: 'Privacy', href: '/privacy' },
-    { name: 'Contact', href: '/contact' },
-  ];
-
-  const handleHomeClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (onHomeClick) {
-      onHomeClick();
-    }
-  };
-
-  return (
-    <header>
-      <nav
-        data-state={isMenuOpen ? 'active' : 'inactive'}
-        className={cn(
-          "fixed z-50 w-full transition-all duration-300",
-          isScrolled ? "bg-gray-900/90 backdrop-blur-lg border-b border-gray-700/50" : ""
-        )}
-      >
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center">
-              <Link href="/" onClick={handleHomeClick} className="flex items-center space-x-2">
-                <img 
-                  src="/phsweblogo.png" 
-                  alt="PHSWEB Internet" 
-                  className="h-16 w-auto"
-                />
-              </Link>
-            </div>
-
-            <div className="hidden md:block">
-              <div className="ml-10 flex items-center space-x-4">
-                {menuItems.map((item, index) => (
-                  item.name === 'Home' ? (
-                    <Link
-                      key={index}
-                      href={item.href}
-                      onClick={handleHomeClick}
-                      className="text-gray-300 hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                    >
-                      {item.name}
-                    </Link>
-                  ) : (
-                    <Link
-                      key={index}
-                      href={item.href}
-                      className="text-gray-300 hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                    >
-                      {item.name}
-                    </Link>
-                  )
-                ))}
-              </div>
-            </div>
-
-            <div className="hidden md:block">
-              <Link href="/login">
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white">Login</Button>
-              </Link>
-            </div>
-
-            <div className="md:hidden">
-              <button
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="text-gray-300"
-              >
-                {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {isMenuOpen && (
-          <div className="md:hidden bg-gray-900/95 backdrop-blur-lg border-t border-gray-700/50">
-            <div className="space-y-1 px-2 pb-3 pt-2">
-              {menuItems.map((item, index) => (
-                item.name === 'Home' ? (
-                  <Link
-                    key={index}
-                    href={item.href}
-                    onClick={handleHomeClick}
-                    className="text-gray-300 hover:text-blue-400 block px-3 py-2 rounded-md text-base font-medium"
-                  >
-                    {item.name}
-                  </Link>
-                ) : (
-                  <Link
-                    key={index}
-                    href={item.href}
-                    className="text-gray-300 hover:text-blue-400 block px-3 py-2 rounded-md text-base font-medium"
-                  >
-                    {item.name}
-                  </Link>
-                )
-              ))}
-              <div className="pt-4">
-                <Link href="/login">
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">Login</Button>
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
-      </nav>
-    </header>
-  );
-};
-
-// GradientBars Component
-const GradientBars: React.FC = () => {
-  const [numBars] = useState(15);
-
-  const calculateHeight = (index: number, total: number) => {
-    const position = index / (total - 1);
-    const maxHeight = 100;
-    const minHeight = 30;
-    
-    const center = 0.5;
-    const distanceFromCenter = Math.abs(position - center);
-    const heightPercentage = Math.pow(distanceFromCenter * 2, 1.2);
-    
-    return minHeight + (maxHeight - minHeight) * heightPercentage;
-  };
-
-  return (
-    <div className="absolute inset-0 z-0 overflow-hidden">
-      <div 
-        className="flex h-full"
-        style={{
-          width: '100%',
-          transform: 'translateZ(0)',
-          backfaceVisibility: 'hidden',
-          WebkitFontSmoothing: 'antialiased',
-        }}
-      >
-        {Array.from({ length: numBars }).map((_, index) => {
-          const height = calculateHeight(index, numBars);
-          return (
-            <div
-              key={index}
-              style={{
-                flex: '1 0 calc(100% / 15)',
-                maxWidth: 'calc(100% / 15)',
-                height: '100%',
-                background: 'linear-gradient(to top, rgba(59, 130, 246, 0.4), rgba(147, 51, 234, 0.2), transparent)',
-                transform: `scaleY(${height / 100})`,
-                transformOrigin: 'bottom',
-                transition: 'transform 0.5s ease-in-out',
-                animation: 'pulseBar 2s ease-in-out infinite alternate',
-                animationDelay: `${index * 0.1}s`,
-                outline: '1px solid rgba(0, 0, 0, 0)',
-                boxSizing: 'border-box',
-              }}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-};
 
 // RenewalForm Component
 interface RenewalFormProps {
@@ -944,35 +709,30 @@ const RenewalForm: React.FC<RenewalFormProps> = ({ onSubmit, isLoading }) => {
   };
 
   return (
-    <div className="w-full max-w-md mx-auto">
-      <form onSubmit={handleSubmit} className="w-full">
-        <div className="flex flex-col space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
-            <input
-              type="text"
-              value={accountName}
-              onChange={(e) => setAccountName(e.target.value)}
-              placeholder="Enter your account name or email"
-              className="h-14 w-full rounded-xl border border-gray-600 bg-gray-800/80 backdrop-blur-sm pl-10 pr-4 text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
-              required
-              disabled={isLoading}
-            />
-          </div>
-          <Button 
-            type="submit" 
-            disabled={isLoading}
-            className="h-14 w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25"
-          >
-            {isLoading ? (
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-            ) : (
-              'View Account Details'
-            )}
-          </Button>
-        </div>
-      </form>
-    </div>
+    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+      <input
+        type="text"
+        value={accountName}
+        onChange={(e) => setAccountName(e.target.value)}
+        placeholder="Account name or email"
+        className="flex-grow bg-white/10 text-white rounded-2xl px-6 py-4 outline-none border border-white/10 font-['Outfit'] transition-all focus:bg-white focus:text-[#2e2e2e] focus:ring-4 focus:ring-[#efab18]/20 placeholder:text-white/40"
+        required
+        disabled={isLoading}
+      />
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        type="submit"
+        disabled={isLoading}
+        className="whitespace-nowrap bg-[#efab18] text-black rounded-2xl px-8 py-4 font-bold font-['Outfit'] shadow-[0_10px_30px_rgba(239,171,24,0.3)] hover:bg-[#ffba26] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+      >
+        {isLoading ? (
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-black border-t-transparent"></div>
+        ) : (
+          'View Details'
+        )}
+      </motion.button>
+    </form>
   );
 };
 
@@ -1168,17 +928,8 @@ const ISPLandingPage: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-black">
+    <>
       <style jsx global>{`
-        @keyframes pulseBar {
-          0% {
-            transform: scaleY(var(--scale-y, 1)) scaleX(0.95);
-          }
-          100% {
-            transform: scaleY(var(--scale-y, 1)) scaleX(1);
-          }
-        }
-        
         @keyframes fadeIn {
           from {
             opacity: 0;
@@ -1195,107 +946,135 @@ const ISPLandingPage: React.FC = () => {
         }
       `}</style>
       
-      {/* Dark overlay for extra depth */}
-      <div className="absolute inset-0 bg-gradient-to-b from-blue-900/20 via-purple-900/10 to-gray-900/30"></div>
-      <GradientBars />
-      
-      <Navbar onHomeClick={resetForm} />
-      
-      <main className="relative z-10">
-        {/* Hero Section */}
-        <section className="relative pt-24 pb-20 md:pt-40 md:pb-32">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col items-center text-center max-w-4xl mx-auto">
-              <AnimatedGroup>
-                <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl md:text-5xl mb-6">
-                  <span className="block text-white mb-2">Renew Your</span>
-                  <span className="block bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                    Internet Subscription
-                  </span>
+      {/* Hero Section - Connekt-main design */}
+      <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-4 pt-32 pb-16 overflow-hidden">
+        {/* Decorative Blur Backgrounds */}
+        <div className="absolute top-1/4 -left-20 w-64 h-64 bg-[#efab18] opacity-10 blur-[100px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-1/4 -right-20 w-64 h-64 bg-[#efab18] opacity-10 blur-[100px] rounded-full pointer-events-none" />
+
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="flex flex-col items-center gap-8 md:gap-12 w-full max-w-5xl"
+        >
+          {/* Avatars */}
+          <div className="flex -space-x-3 items-center">
+            {[
+              "/assets/390c7306f2c93935729cecc6ffdd75f4cd164298.png",
+              "/assets/c243849c271a30f13bcc8fb2aa85a7003566f6ad.png",
+              "/assets/584c8acc10113a33d0172bf0b2ff0f78d06064eb.png",
+              "/assets/8d77d6c350f61f0e7dc54d409639faa1dc364cd7.png",
+              "/assets/eef663647d360bea89a9d3bd53968efd3ff16f42.png"
+            ].map((avatar, idx) => (
+              <motion.div
+                key={idx}
+                initial={{ scale: 0, x: -20 }}
+                animate={{ scale: 1, x: 0 }}
+                transition={{ delay: 0.3 + idx * 0.1, type: "spring", stiffness: 200 }}
+                className="relative size-10 md:size-12 rounded-full border-2 border-[#efab18] overflow-hidden shadow-xl"
+              >
+                <Image
+                  src={avatar}
+                  alt={`User ${idx + 1}`}
+                  fill
+                  sizes="(min-width: 768px) 48px, 40px"
+                  className="object-cover"
+                />
+              </motion.div>
+            ))}
+            <motion.div 
+              initial={{ opacity: 0, scale: 0 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.8 }}
+              className="ml-4 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 text-[10px] md:text-xs font-medium"
+            >
+              10k+ Happy Users
+            </motion.div>
+          </div>
+
+          {/* Content based on state */}
+          {userData && servicePlan ? (
+            <div className="w-full space-y-8">
+              <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                <h1 className="text-4xl md:text-5xl font-black font-['Outfit'] text-white">
+                  Account Information
                 </h1>
-                
-                <div className="mt-12 w-full max-w-6xl">
-                  {userData && servicePlan ? (
-                    <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <h2 className="text-2xl font-bold text-white">Account Information</h2>
-                        <Button 
-                          onClick={resetForm}
-                          className="bg-gray-700/80 hover:bg-gray-600/80 text-gray-100 hover:text-white border border-gray-500/50 hover:border-gray-400 px-6 py-2 rounded-lg font-semibold text-sm shadow-lg backdrop-blur-sm transition-all duration-200 transform hover:scale-105 hover:shadow-xl"
-                        >
-                          <Search className="mr-2 h-4 w-4" />
-                          Search Another Account
-                        </Button>
-                      </div>
-                      
-                      {/* Account Updated Success Indicator */}
-                      {showAccountUpdated && (
-                        <div className="rounded-xl bg-gradient-to-r from-green-600/90 to-emerald-600/90 backdrop-blur-sm p-4 text-white animate-fadeIn shadow-xl border border-green-500/30">
-                          <p className="font-semibold text-center">✓ Account Updated Successfully!</p>
-                          <p className="text-green-100 text-sm text-center mt-1">Your subscription has been renewed and account information refreshed.</p>
-                        </div>
-                      )}
-                      
-                      <UserDetails 
-                        userData={userData} 
-                        servicePlan={servicePlan} 
-                        onPaymentSuccess={handlePaymentSuccess}
-                        onPaymentClose={handlePaymentClose}
-                        paystackConfig={generatePaystackConfig()}
-                        isProcessingPayment={isProcessingPayment}
-                        originalUsername={originalUsername}
-                      />
-                    </div>
-                  ) : (
-                    <div className="max-w-lg mx-auto space-y-6">
-                      <RenewalForm onSubmit={handleAccountLookup} isLoading={isLoading} />
-                      
-                      <p className="max-w-3xl text-xl sm:text-2xl text-gray-300 leading-relaxed text-center">
-                        Stay connected with our premium internet services. Renew your subscription today for uninterrupted access to high-speed internet.
-                      </p>
-                      
-                      {error && (
-                        <div className="mt-4 rounded-xl bg-red-600/90 backdrop-blur-sm p-4 text-white shadow-2xl border border-red-500/30">
-                          <p className="text-center">{error}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                <Button 
+                  onClick={resetForm}
+                  className="bg-white/10 hover:bg-white/20 text-white border border-white/20 hover:border-[#efab18] px-6 py-3 rounded-2xl font-semibold text-sm shadow-lg backdrop-blur-md transition-all duration-200 transform hover:scale-105"
+                >
+                  <Search className="mr-2 h-4 w-4" />
+                  Search Another Account
+                </Button>
+              </div>
+              
+              {/* Account Updated Success Indicator */}
+              {showAccountUpdated && (
+                <div className="rounded-2xl bg-gradient-to-r from-green-600/90 to-emerald-600/90 backdrop-blur-sm p-4 text-white animate-fadeIn shadow-xl border border-green-500/30">
+                  <p className="font-semibold text-center">✓ Account Updated Successfully!</p>
+                  <p className="text-green-100 text-sm text-center mt-1">Your subscription has been renewed and account information refreshed.</p>
                 </div>
-              </AnimatedGroup>
+              )}
+              
+              <UserDetails 
+                userData={userData} 
+                servicePlan={servicePlan} 
+                onPaymentSuccess={handlePaymentSuccess}
+                onPaymentClose={handlePaymentClose}
+                paystackConfig={generatePaystackConfig()}
+                isProcessingPayment={isProcessingPayment}
+                originalUsername={originalUsername}
+              />
             </div>
-          </div>
-        </section>
-      </main>
-      
-      {/* Footer */}
-      <footer className="bg-gray-900/80 backdrop-blur-sm border-t border-gray-700/50 py-16">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col items-center justify-between md:flex-row max-w-6xl mx-auto">
-            <div className="mb-8 md:mb-0 text-center md:text-left">
-              <span className="text-blue-400 font-bold text-xl">PHSWEB Internet</span>
-              <p className="mt-3 text-gray-400 text-justify max-w-xs">
-                Providing reliable internet services since 2022
+          ) : (
+            <>
+              {/* Heading */}
+              <div className="flex flex-col gap-2">
+                <h1 className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black leading-[1.1] font-['Outfit'] tracking-tight">
+                  <div className="flex flex-col items-center justify-center">
+                    <span className="text-white font-normal text-[40px] md:text-[70px]">Renew Your</span>
+                    <span className="bg-gradient-to-r from-[#ffba26] via-[#fffdfa] to-[#ffba26] bg-clip-text text-transparent font-normal text-[45px] md:text-[80px]">Internet Subscription</span>
+                  </div>
+                </h1>
+              </div>
+
+              {/* Form Container */}
+              <div className="w-full max-w-lg mx-auto">
+                <div className="flex flex-col gap-4 sm:gap-6 bg-white/5 backdrop-blur-md p-2 sm:p-3 rounded-[32px] border border-white/10 shadow-2xl">
+                  <RenewalForm onSubmit={handleAccountLookup} isLoading={isLoading} />
+                </div>
+                
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 1 }}
+                  className="mt-4 flex items-center justify-center gap-4 text-xs text-white/40"
+                >
+                  <span className="flex items-center gap-1">✓ Instant Activation</span>
+                  <span className="flex items-center gap-1">✓ 24/7 Support</span>
+                </motion.div>
+
+                {error && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-4 rounded-2xl bg-red-600/90 backdrop-blur-sm p-4 text-white shadow-2xl border border-red-500/30"
+                  >
+                    <p className="text-center font-medium">{error}</p>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Description */}
+              <p className="text-[#979797] text-sm md:text-lg max-w-2xl font-['Outfit'] leading-relaxed mx-auto px-4">
+                Stay connected with our premium internet services. Experience ultra-fast speeds and zero downtime. Renew your subscription today for uninterrupted access.
               </p>
-            </div>
-            <div className="flex space-x-8">
-              <Link href="/terms" className="text-gray-400 hover:text-blue-400 transition-colors">
-                Terms
-              </Link>
-              <Link href="/privacy" className="text-gray-400 hover:text-blue-400 transition-colors">
-                Privacy
-              </Link>
-              <Link href="/contact" className="text-gray-400 hover:text-blue-400 transition-colors">
-                Contact
-              </Link>
-            </div>
-          </div>
-          <div className="mt-12 border-t border-gray-700/50 pt-8 text-center text-gray-400">
-            &copy; {new Date().getFullYear()} PHSWEB Internet. All rights reserved.
-          </div>
-        </div>
-      </footer>
-    </div>
+            </>
+          )}
+        </motion.div>
+      </section>
+    </>
   );
 };
 

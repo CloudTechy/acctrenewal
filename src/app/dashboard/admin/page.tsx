@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -106,12 +106,7 @@ export default function AdminDashboard() {
     endDate: new Date().toISOString().split('T')[0]
   })
 
-  useEffect(() => {
-    fetchAnalytics()
-    fetchKPIData()
-  }, [dateRange])
-
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams({
@@ -130,9 +125,9 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [dateRange])
 
-  const fetchKPIData = async () => {
+  const fetchKPIData = useCallback(async () => {
     setKpiLoading(true)
     try {
       const params = new URLSearchParams({
@@ -151,7 +146,12 @@ export default function AdminDashboard() {
     } finally {
       setKpiLoading(false)
     }
-  }
+  }, [dateRange])
+
+  useEffect(() => {
+    fetchAnalytics()
+    fetchKPIData()
+  }, [fetchAnalytics, fetchKPIData])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', {

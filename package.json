@@ -7,6 +7,10 @@
     "build": "cross-env NEXT_PRIVATE_TURBOPACK=false next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --ci --coverage --maxWorkers=2",
     "test-mikrotik": "node test-mikrotik-connection.mjs",
     "test-phase1": "node test-phase1-improvements.mjs"
   },
@@ -28,20 +32,30 @@
     "react-dom": "^18.3.1",
     "react-paystack": "^6.0.0",
     "recharts": "^2.15.3",
+    "sonner": "^2.0.7",
     "source-map-support": "^0.5.21",
     "tailwind-merge": "^3.3.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "15.3.3",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "next-router-mock": "^1.0.5",
     "tailwindcss": "^4",
+    "ts-jest": "^29.4.6",
+    "ts-node": "^10.9.2",
     "tw-animate-css": "^1.3.4",
-    "typescript": "^5",
-    "cross-env": "^7.0.3"
+    "typescript": "^5"
   }
 }

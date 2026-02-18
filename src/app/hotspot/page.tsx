@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   MapPin, 
@@ -131,7 +131,24 @@ export default function HotspotManagementPage() {
   });
 
   // Fetch locations from database
-  const fetchLocations = async () => {
+  const fetchRouterConfigForLocation = useCallback(async (locationId: string) => {
+    try {
+      const response = await fetch(`/api/locations/${locationId}/router`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setLocations(prev => prev.map(loc => 
+          loc.id === locationId 
+            ? { ...loc, routerConfig: data.data }
+            : loc
+        ));
+      }
+    } catch (err) {
+      console.error(`Error fetching router config for ${locationId}:`, err);
+    }
+  }, []);
+
+  const fetchLocations = useCallback(async () => {
     try {
       const response = await fetch('/api/locations');
       const data = await response.json();
@@ -159,28 +176,10 @@ export default function HotspotManagementPage() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Fetch router config for a specific location
-  const fetchRouterConfigForLocation = async (locationId: string) => {
-    try {
-      const response = await fetch(`/api/locations/${locationId}/router`);
-      const data = await response.json();
-      
-      if (data.success) {
-        setLocations(prev => prev.map(loc => 
-          loc.id === locationId 
-            ? { ...loc, routerConfig: data.data }
-            : loc
-        ));
-      }
-    } catch (err) {
-      console.error(`Error fetching router config for ${locationId}:`, err);
-    }
-  };
+  }, [fetchRouterConfigForLocation]);
 
   // Fetch real-time data from API
-  const fetchHotspotStats = async () => {
+  const fetchHotspotStats = useCallback(async () => {
     try {
       setError(null);
       setIsFetching(true);
@@ -240,7 +239,7 @@ export default function HotspotManagementPage() {
     } finally {
       setIsFetching(false);
     }
-  };
+  }, []);
 
   // Test router connection
   const testConnection = async (locationId: string, config: RouterConfig) => {
@@ -311,7 +310,7 @@ export default function HotspotManagementPage() {
   // Initial load and periodic updates
   useEffect(() => {
     fetchLocations().then(() => {
-    fetchHotspotStats();
+      fetchHotspotStats();
     });
     
     const interval = setInterval(fetchHotspotStats, 300000); // 5 minutes
@@ -319,7 +318,7 @@ export default function HotspotManagementPage() {
     return () => {
       clearInterval(interval);
     };
-  }, []);
+  }, [fetchLocations, fetchHotspotStats]);
 
   const getConnectionStatusBadge = (config?: RouterConfig) => {
     if (!config) {

@@ -4,6 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Clock, Users, Zap, Shield } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 
 const LoginComingSoonPage: React.FC = () => {
@@ -14,10 +15,13 @@ const LoginComingSoonPage: React.FC = () => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <Link href="/" className="flex items-center space-x-2">
-              <img 
-                src="/phsweblogo.png" 
-                alt="PHSWEB Internet" 
+              <Image
+                src="/phsweblogo.png"
+                alt="PHSWEB Internet"
+                width={160}
+                height={64}
                 className="h-16 w-auto"
+                priority
               />
             </Link>
             <Link href="/">

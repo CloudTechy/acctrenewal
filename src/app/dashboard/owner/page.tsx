@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -53,19 +53,7 @@ export default function OwnerDashboard() {
     endDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0] // Tomorrow to include today's transactions
   })
 
-  // Fetch all owners for selection
-  useEffect(() => {
-    fetchOwners()
-  }, [])
-
-  // Fetch commission data when owner is selected
-  useEffect(() => {
-    if (selectedOwnerId) {
-      fetchCommissionData()
-    }
-  }, [selectedOwnerId, dateRange])
-
-  const fetchOwners = async () => {
+  const fetchOwners = useCallback(async () => {
     try {
       const response = await fetch('/api/owners')
       const data = await response.json()
@@ -79,9 +67,9 @@ export default function OwnerDashboard() {
     } catch (error) {
       console.error('Error fetching owners:', error)
     }
-  }
+  }, [selectedOwnerId])
 
-  const fetchCommissionData = async () => {
+  const fetchCommissionData = useCallback(async () => {
     if (!selectedOwnerId) return
     
     setLoading(true)
@@ -108,7 +96,19 @@ export default function OwnerDashboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedOwnerId, dateRange, owners])
+
+  // Fetch all owners for selection
+  useEffect(() => {
+    fetchOwners()
+  }, [fetchOwners])
+
+  // Fetch commission data when owner is selected
+  useEffect(() => {
+    if (selectedOwnerId) {
+      fetchCommissionData()
+    }
+  }, [selectedOwnerId, fetchCommissionData])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', {

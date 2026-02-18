@@ -1,29 +1,24 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
+import { Outfit } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
+import { Toaster } from "sonner";
+import { Navbar } from "@/components/Navbar";
+import { Footer } from "@/components/Footer";
+import Image from "next/image";
 import "./globals.css";
 
-// Use local font files to avoid remote fetch issues during build (turbopack resolver)
-// Place the font files at: /public/fonts/geist-sans.woff2 and /public/fonts/geist-mono.woff2
-const geistSans = localFont({
-  // relative path from this file to the public folder
-  src: "../../public/fonts/geist-sans.woff2",
-  variable: "--font-geist-sans",
-  display: "swap",
-});
-
-const geistMono = localFont({
-  // relative path from this file to the public folder
-  src: "../../public/fonts/geist-mono.woff2",
-  variable: "--font-geist-mono",
+const outfit = Outfit({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800", "900"],
+  variable: "--font-outfit",
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "PHSWEB unlimited Internet",
-  description: "Renew your PHSWEB Internet subscription easily. Stay connected with our premium internet services for uninterrupted access to high-speed internet.",
-  keywords: "PHSWEB, Internet, Subscription, Renewal, High-speed Internet, Nigeria, ISP",
-  authors: [{ name: "PHSWEB Internet" }],
+  title: "CONNEKT Broadband Solutions",
+  description: "Renew your internet subscription easily. Experience ultra-fast speeds and zero downtime with CONNEKT broadband solutions.",
+  keywords: "CONNEKT, Internet, Broadband, Subscription, Renewal, High-speed Internet, Nigeria, ISP",
+  authors: [{ name: "CONNEKT Broadband" }],
   icons: {
     icon: [
       { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
@@ -33,15 +28,15 @@ export const metadata: Metadata = {
     shortcut: '/favicon.png',
   },
   openGraph: {
-    title: "PHSWEB unlimited Internet",
-    description: "Renew your PHSWEB Internet subscription easily. Stay connected with our premium internet services for uninterrupted access to high-speed internet.",
+    title: "CONNEKT Broadband Solutions",
+    description: "Renew your internet subscription easily. Experience ultra-fast speeds and zero downtime with CONNEKT broadband solutions.",
     type: "website",
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "PHSWEB unlimited Internet",
-    description: "Renew your PHSWEB Internet subscription easily. Stay connected with our premium internet services for uninterrupted access to high-speed internet.",
+    title: "CONNEKT Broadband Solutions",
+    description: "Renew your internet subscription easily. Experience ultra-fast speeds and zero downtime with CONNEKT broadband solutions.",
   },
 };
 
@@ -54,9 +49,48 @@ export default function RootLayout({
     <html lang="en">
       <body
         suppressHydrationWarning
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${outfit.variable} antialiased`}
       >
-        {children}
+        <div className="relative min-h-screen w-full bg-[#0d0d0d] text-white selection:bg-[#efab18] selection:text-black font-['Outfit'] overflow-x-hidden">
+          {/* Background Layer */}
+          <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+            <div className="absolute inset-0 bg-radial-gradient from-transparent to-[#0d0d0d]/90 z-1" />
+            <Image 
+              src="/assets/9c8972844f0e811c448d184ca2d7dc97cbe073a5.png"
+              alt="" 
+              fill
+              className="object-cover opacity-40 scale-105 animate-pulse-slow"
+              style={{ 
+                animationDuration: '10s'
+              }}
+              priority
+              unoptimized
+            />
+            <div className="absolute inset-0 bg-[#0d0d0d]/40 mix-blend-multiply" />
+          </div>
+
+          <div className="relative z-10 flex flex-col min-h-screen">
+            <Navbar />
+            <main className="flex-grow flex flex-col">
+              {children}
+            </main>
+            <Footer />
+          </div>
+
+          <Toaster 
+            position="bottom-center" 
+            richColors 
+            toastOptions={{
+              style: {
+                background: 'rgba(26, 26, 26, 0.9)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                color: '#fff',
+                borderRadius: '16px'
+              }
+            }}
+          />
+        </div>
         <Analytics />
       </body>
     </html>
