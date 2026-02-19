@@ -57,9 +57,12 @@ services:
       - APP_DIR=/app
       - DOCKER_COMPOSE_FILE=docker-compose.yml
       - DOCKER_COMPOSE_CMD=docker compose
+      - DOCKER_COMPOSE_FILE_PROD=docker-compose.prod.yml
+      - DOCKER_COMPOSE_FILE_STAGING=docker-compose.yml
     volumes:
       - ./:/app
       - /var/run/docker.sock:/var/run/docker.sock
+      - /root/.docker/config.json:/root/.docker/config.json:ro
     networks:
       - acctrenewal-network
 
