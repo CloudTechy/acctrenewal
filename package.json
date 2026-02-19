@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "cross-env NEXT_PRIVATE_TURBOPACK=false next build",
     "start": "next start",
+    "prod": "npm run build && npm run start",
     "lint": "next lint",
     "test": "jest",
     "test:watch": "jest --watch",

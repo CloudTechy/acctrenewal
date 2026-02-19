@@ -1,0 +1,77 @@
+version: '3.8'
+
+# Production Docker Compose configuration
+# Usage: docker-compose -f docker-compose.prod.yml up -d
+
+services:
+  # Next.js Application (Production)
+  acctrenewal-app:
+    image: cloudtechy/acctrenewal:master
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: acctrenewal-app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+
+    # Load environment variables from .env file
+    env_file:
+      - .env
+
+    # Mount volume for logs (optional)
+    volumes:
+      - ./logs:/app/logs
+
+    networks:
+      - acctrenewal-network
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 512M
+
+  # Webhook Deployment Server (Dockerized) - enable with --profile vps
+  acctrenewal-webhook:
+    build:
+      context: .
+      dockerfile: Dockerfile.webhook
+    container_name: acctrenewal-webhook
+    restart: unless-stopped
+    profiles:
+      - vps
+    ports:
+      - "127.0.0.1:3001:3001"
+    env_file:
+      - .webhook.env
+    environment:
+      - PORT=3001
+      - APP_DIR=/app
+      - DOCKER_COMPOSE_FILE=docker-compose.prod.yml
+      - DOCKER_COMPOSE_CMD=docker compose
+    volumes:
+      - ./:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - acctrenewal-network
+
+networks:
+  acctrenewal-network:
+    driver: bridge
+
+volumes:
+  logs:
+    driver: local
