@@ -50,7 +50,7 @@ export default function TermsPage() {
               </div>
 
               <p>
-                Connekt Internet's liability is limited to the monthly service fee. We are not responsible for indirect damages, data loss, or business interruption resulting from service use or outages.
+                Connekt Internet&apos;s liability is limited to the monthly service fee. We are not responsible for indirect damages, data loss, or business interruption resulting from service use or outages.
               </p>
             </div>
           </div>

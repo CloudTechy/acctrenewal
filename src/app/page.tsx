@@ -2,11 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Calendar, CreditCard, Globe, User } from 'lucide-react';
+import { Search, Globe, User } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardContent } from '@/components/ui/card';
 
 // Dynamically import Paystack to avoid SSR issues
 const PaystackButton = dynamic(
