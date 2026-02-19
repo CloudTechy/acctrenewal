@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { FileText, Shield } from 'lucide-react';
+import { Info } from 'lucide-react';
 
 export default function TermsPage() {
   return (
@@ -15,7 +15,7 @@ export default function TermsPage() {
         animate={{ opacity: 1, y: 0 }}
         className="text-4xl md:text-5xl font-black mb-12 tracking-tight font-['Outfit'] text-center"
       >
-        TERMS OF SERVICE
+        TERMS
       </motion.h1>
 
       <motion.div
@@ -29,53 +29,30 @@ export default function TermsPage() {
           <div className="flex flex-col gap-6">
             <div className="flex items-center gap-4">
               <div className="size-10 rounded-lg bg-[#ffd534] flex items-center justify-center text-black shadow-[0_0_15px_rgba(255,213,52,0.3)]">
-                <FileText size={20} />
+                <Info size={20} />
               </div>
-              <h2 className="text-xl md:text-2xl font-bold font-['Outfit']">Agreement to Terms</h2>
+              <h2 className="text-xl md:text-2xl font-bold font-['Outfit']">Information we collect</h2>
             </div>
             
             <div className="text-white/70 text-sm md:text-base leading-relaxed font-['Outfit'] space-y-6">
               <p>
-                By accessing and using PHSWEB Internet services, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use our services.
+                By accessing and using Connekt Internet services, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use our services.
               </p>
 
               <div className="space-y-4">
                 <h3 className="text-white font-bold text-lg">Internet Service</h3>
-                <p>PHSWEB Internet provides residential and business internet connectivity services including:</p>
+                <p>Internet provides residential and business internet connectivity services including:</p>
                 <ul className="list-disc pl-6 space-y-2">
                   <li>High-speed broadband internet access</li>
                   <li>Wi-Fi connectivity solutions</li>
                   <li>Technical support and maintenance</li>
-                  <li>Account management and billing services</li>
                 </ul>
               </div>
 
-              <div className="space-y-4">
-                <h3 className="text-white font-bold text-lg">Payment Terms</h3>
-                <p>
-                  Subscription fees are payable in advance. Payment can be made through our online portal using authorized payment methods. Service will be suspended if payment is not received by the due date.
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-white font-bold text-lg">Service Usage</h3>
-                <p>
-                  You agree to use our services in compliance with all applicable laws and regulations. Prohibited activities include but are not limited to illegal file sharing, network attacks, and activities that may harm our infrastructure or other users.
-                </p>
-              </div>
+              <p>
+                Connekt Internet's liability is limited to the monthly service fee. We are not responsible for indirect damages, data loss, or business interruption resulting from service use or outages.
+              </p>
             </div>
-          </div>
-
-          <div className="flex flex-col gap-6 pt-6 border-t border-white/10">
-            <div className="flex items-center gap-4">
-              <div className="size-10 rounded-lg bg-[#ffd534] flex items-center justify-center text-black">
-                <Shield size={20} />
-              </div>
-              <h2 className="text-xl md:text-2xl font-bold font-['Outfit']">Limitation of Liability</h2>
-            </div>
-            <p className="text-white/70 text-sm md:text-base leading-relaxed font-['Outfit']">
-              PHSWEB Internet&apos;s liability is limited to the monthly service fee. We are not responsible for indirect damages, data loss, or business interruption resulting from service use or outages. We strive to maintain 99.9% uptime but cannot guarantee uninterrupted service.
-            </p>
           </div>
 
         </div>

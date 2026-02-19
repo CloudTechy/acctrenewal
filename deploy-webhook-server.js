@@ -10,6 +10,8 @@
  *   - WEBHOOK_SECRET: Secret for HMAC signature validation
  *   - APP_DIR: Application directory (default: ~/acctrenewal)
  *   - DOCKER_COMPOSE_FILE: Docker compose file name (default: docker-compose.yml)
+ *   - DOCKER_COMPOSE_FILE_PROD: Docker compose file for production (default: docker-compose.prod.yml)
+ *   - DOCKER_COMPOSE_FILE_STAGING: Docker compose file for staging (default: docker-compose.yml)
  */
 
 const http = require('http');
@@ -31,6 +33,8 @@ const PORT = process.env.PORT || 3001;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'your-webhook-secret';
 const APP_DIR = expandHome(process.env.APP_DIR || '~/acctrenewal');
 const COMPOSE_FILE = process.env.DOCKER_COMPOSE_FILE || 'docker-compose.yml';
+const COMPOSE_FILE_PROD = process.env.DOCKER_COMPOSE_FILE_PROD || 'docker-compose.prod.yml';
+const COMPOSE_FILE_STAGING = process.env.DOCKER_COMPOSE_FILE_STAGING || COMPOSE_FILE;
 const COMPOSE_CMD = process.env.DOCKER_COMPOSE_CMD || 'docker compose';
 const LOG_FILE = path.join(APP_DIR, 'deploy.log');
 
@@ -75,10 +79,17 @@ const validateSignature = (payload, signature) => {
 // Handle deployment
 const handleDeployment = async (data) => {
   // SECURITY: Use fixed values to prevent command injection
-  const branch = 'master';
-  const image = 'cloudtechy/acctrenewal:master';
+  const deployEnv = data.environment === 'production' ? 'production' : 'staging';
+  const branch = deployEnv === 'production' ? 'master' : 'dev/cloudtechy';
+  const image = deployEnv === 'production'
+    ? 'cloudtechy/acctrenewal:prod'
+    : 'cloudtechy/acctrenewal:staging';
+  const preferredCompose = deployEnv === 'production' ? COMPOSE_FILE_PROD : COMPOSE_FILE_STAGING;
+  const composeFile = fs.existsSync(path.join(APP_DIR, preferredCompose))
+    ? preferredCompose
+    : COMPOSE_FILE;
   
-  log(`🚀 Starting deployment for ${branch} branch`);
+  log(`🚀 Starting deployment for ${deployEnv} (${branch})`);
   
   try {
     // Step 1: Navigate to app directory
@@ -109,12 +120,12 @@ const handleDeployment = async (data) => {
     }
 
     // Step 5: Backup current docker-compose.yml
-    const composePath = path.join(APP_DIR, COMPOSE_FILE);
+    const composePath = path.join(APP_DIR, composeFile);
     const timestamp = Date.now();
     const backupPath = `${composePath}.backup.${timestamp}`;
     if (fs.existsSync(composePath)) {
       log(`💾 Backing up docker-compose file...`);
-      await executeCommand('cp', [COMPOSE_FILE, backupPath], APP_DIR);
+      await executeCommand('cp', [composeFile, backupPath], APP_DIR);
     }
 
     // Step 6: Stop and remove ONLY the app container (keep webhook running)
@@ -132,7 +143,7 @@ const handleDeployment = async (data) => {
     log(`🚀 Starting new app container with image ${image}...`);
     await executeCommand(
       'docker',
-      ['compose', '-f', COMPOSE_FILE, 'up', '-d', '--no-build', 'acctrenewal-app'],
+      ['compose', '-f', composeFile, 'up', '-d', '--no-build', 'acctrenewal-app'],
       APP_DIR
     );
 
@@ -177,7 +188,7 @@ const handleDeployment = async (data) => {
       () => log(`No images to prune`)
     );
 
-    log(`✅ Deployment successful! Branch: ${branch}, Image: ${image}`);
+    log(`✅ Deployment successful! Env: ${deployEnv}, Branch: ${branch}, Image: ${image}`);
     return { success: true, message: 'Deployment successful' };
 
   } catch (error) {
@@ -192,11 +203,11 @@ const handleDeployment = async (data) => {
       
       if (backupFiles.length > 0) {
         const latestBackup = backupFiles[0];
-        await executeCommand('cp', [latestBackup, COMPOSE_FILE], APP_DIR);
-        await executeCommand('docker', ['compose', '-f', COMPOSE_FILE, 'down'], APP_DIR).catch(() => {});
+        await executeCommand('cp', [latestBackup, composeFile], APP_DIR);
+        await executeCommand('docker', ['compose', '-f', composeFile, 'down'], APP_DIR).catch(() => {});
         // Ensure stale container name does not block rollback
         await executeCommand('docker', ['rm', '-f', 'acctrenewal-app'], APP_DIR).catch(() => {});
-        await executeCommand('docker', ['compose', '-f', COMPOSE_FILE, 'up', '-d'], APP_DIR);
+        await executeCommand('docker', ['compose', '-f', composeFile, 'up', '-d'], APP_DIR);
         log(`✅ Rollback successful`);
       }
     } catch (rollbackErr) {
@@ -244,8 +255,33 @@ const server = http.createServer(async (req, res) => {
           return;
         }
         
-        // Only allow master branch
-        const allowedBranches = ['master', 'refs/heads/master'];
+        const allowedBranchesByEnv = {
+          production: ['master', 'refs/heads/master'],
+          staging: ['dev/cloudtechy', 'refs/heads/dev/cloudtechy']
+        };
+        const allowedImagesByEnv = {
+          production: ['cloudtechy/acctrenewal:prod'],
+          staging: ['cloudtechy/acctrenewal:staging']
+        };
+
+        let deployEnv = data.environment;
+        if (deployEnv !== 'production' && deployEnv !== 'staging') {
+          if (allowedBranchesByEnv.production.includes(data.branch)) {
+            deployEnv = 'production';
+          } else if (allowedBranchesByEnv.staging.includes(data.branch)) {
+            deployEnv = 'staging';
+          }
+        }
+
+        if (deployEnv !== 'production' && deployEnv !== 'staging') {
+          log(`❌ Invalid environment: ${data.environment}`);
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid environment' }));
+          return;
+        }
+
+        // Only allow expected branches per environment
+        const allowedBranches = allowedBranchesByEnv[deployEnv];
         if (!allowedBranches.includes(data.branch)) {
           log(`❌ Unauthorized branch: ${data.branch}`);
           res.writeHead(403, { 'Content-Type': 'application/json' });
@@ -253,19 +289,25 @@ const server = http.createServer(async (req, res) => {
           return;
         }
         
-        // Only allow specific image
-        const allowedImage = 'cloudtechy/acctrenewal:master';
-        if (data.image && data.image !== allowedImage) {
+        // Only allow specific image per environment
+        const allowedImages = allowedImagesByEnv[deployEnv];
+        if (data.image && !allowedImages.includes(data.image)) {
           log(`❌ Unauthorized image: ${data.image}`);
           res.writeHead(403, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Unauthorized image' }));
           return;
         }
         
-        log(`✅ Webhook signature validated for branch: ${data.branch}`);
+        const normalizedPayload = {
+          ...data,
+          environment: deployEnv,
+          image: data.image || allowedImages[0]
+        };
+
+        log(`✅ Webhook validated for ${deployEnv} (${data.branch})`);
 
         // Handle deployment asynchronously
-        handleDeployment(data)
+        handleDeployment(normalizedPayload)
           .then((result) => {
             log(`✅ Deployment completed successfully`);
           })
@@ -278,7 +320,8 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({
           success: true,
           message: 'Deployment initiated',
-          branch: data.branch
+          branch: data.branch,
+          environment: deployEnv
         }));
 
       } catch (error) {

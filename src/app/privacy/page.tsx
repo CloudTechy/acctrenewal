@@ -31,10 +31,10 @@ export default function PrivacyPage() {
               <div className="size-10 rounded-lg bg-[#ffd534] flex items-center justify-center text-black">
                 <Shield size={20} />
               </div>
-              <h2 className="text-xl md:text-2xl font-bold font-['Outfit']">Our Commitment to Privacy</h2>
+              <h2 className="text-xl md:text-2xl font-bold font-['Outfit']">Our Commitment to privacy</h2>
             </div>
             <p className="text-white/60 text-sm md:text-base leading-relaxed font-['Outfit']">
-              At PHSWEB Internet, we are committed to protecting your privacy and personal information. This Privacy Policy explains how we collect, use, and safeguard your data when you use our services.
+              At Connekt Internet, we are committed to protecting your privacy and personal information. This Privacy Policy explains how we collect, use, and safeguard your data when you use our services.
             </p>
           </div>
 
@@ -44,12 +44,12 @@ export default function PrivacyPage() {
               <div className="size-10 rounded-lg bg-[#ffd534] flex items-center justify-center text-black">
                 <Info size={20} />
               </div>
-              <h2 className="text-xl md:text-2xl font-bold font-['Outfit']">Information We Collect</h2>
+              <h2 className="text-xl md:text-2xl font-bold font-['Outfit']">information we collect</h2>
             </div>
             <div className="flex flex-col gap-4">
               <p className="text-white/80 font-medium text-sm md:text-base font-['Outfit']">Personal Information:</p>
               <ul className="flex flex-col gap-2">
-                {["Name, email address, and phone number", "Billing address and payment information", "Service installation address", "Usage and network data"].map((item, i) => (
+                {["Name, email address, and phone number", "Billing address and payment information", "Service installation address"].map((item, i) => (
                   <li key={i} className="text-white/60 text-sm flex items-center gap-2 font-['Outfit']">
                     <span className="size-1 bg-[#ffd534] rounded-full" />
                     {item}
@@ -59,21 +59,6 @@ export default function PrivacyPage() {
             </div>
           </div>
         </div>
-
-        <div className="flex flex-col gap-6 pt-6 border-t border-white/10">
-          <h2 className="text-xl md:text-2xl font-bold font-['Outfit']">How We Use Your Information</h2>
-          <p className="text-white/60 text-sm md:text-base leading-relaxed font-['Outfit']">
-            We use your information to provide and improve our internet services, process payments, communicate with you about your account, and ensure network security. We do not sell your personal information to third parties.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-6 pt-6 border-t border-white/10">
-          <h2 className="text-xl md:text-2xl font-bold font-['Outfit']">Data Security</h2>
-          <p className="text-white/60 text-sm md:text-base leading-relaxed font-['Outfit']">
-            We implement industry-standard security measures to protect your data. However, no method of transmission over the internet is 100% secure. We continuously work to improve our security practices.
-          </p>
-        </div>
-
       </motion.div>
     </div>
   );

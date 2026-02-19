@@ -385,6 +385,7 @@ const PaymentButton: React.FC<{
   servicePlan: ServicePlan;
 }> = ({ paystackConfig, onPaymentSuccess, onPaymentClose, isProcessingPayment, servicePlan }) => {
   const [isMounted, setIsMounted] = useState(false);
+  const buttonClassName = "w-full bg-[#dcb400] text-white py-4 rounded-2xl font-semibold text-base shadow-[0_10px_20px_rgba(220,180,0,0.2)] border border-[#6f5d0a] hover:bg-[#efab18] transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
 
   useEffect(() => {
     setIsMounted(true);
@@ -394,7 +395,7 @@ const PaymentButton: React.FC<{
     return (
       <Button 
         disabled={true}
-        className="h-16 px-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+        className={buttonClassName}
       >
         <span>Loading Payment...</span>
       </Button>
@@ -406,14 +407,14 @@ const PaymentButton: React.FC<{
     text: `Pay ${formatCurrency(servicePlan.totalPrice || 0)} - Renew Plan`,
     onSuccess: onPaymentSuccess,
     onClose: onPaymentClose,
-    className: "h-16 px-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+    className: buttonClassName
   };
 
   if (isProcessingPayment) {
     return (
       <Button 
         disabled={true}
-        className="h-16 px-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-500/25 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+        className={buttonClassName}
       >
         <div className="flex items-center gap-3">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
@@ -437,260 +438,164 @@ const UserDetails: React.FC<UserDetailsProps> = ({
 }) => {
   const accountStatus = getAccountStatus(userData);
   const daysToExpiry = calculateDaysToExpiry(userData.expiry || '');
+  const statusValueClass = `${accountStatus.color} ${accountStatus.bgColor} border ${accountStatus.borderColor} px-3 py-1 rounded-lg`;
+  const expiryValueClass = accountStatus.status === 'EXPIRED' ? 'text-[#eb5345]' : 'text-[#19b76f]';
+  const daysValueClass = daysToExpiry !== null && daysToExpiry <= 0 ? 'text-[#eb5345]' : 'text-[#19b76f]';
+  const downloadUsed = formatUsageData(userData.dlbytes || 0).isNegative ? formatUsageData(userData.dlbytes || 0).used : '0 Bytes';
+  const uploadUsed = formatUsageData(userData.ulbytes || 0).isNegative ? formatUsageData(userData.ulbytes || 0).used : '0 Bytes';
+  const totalUsed = formatBytes(Math.abs(userData.dlbytes || 0) + Math.abs(userData.ulbytes || 0));
+
+  const accountStatusItems = [
+    { label: 'status', value: accountStatus.status, valueClass: statusValueClass },
+    { label: 'Username', value: originalUsername || 'N/A', valueClass: 'text-white/90' },
+    { label: 'Expiry Date', value: formatDate(userData.expiry || ''), valueClass: expiryValueClass },
+    { label: 'Days to Expiry', value: daysToExpiry === null ? 'N/A' : (daysToExpiry <= 0 ? 'Expired' : `${daysToExpiry} days`), valueClass: daysValueClass },
+  ];
+
+  const currentPlanItems = [
+    { label: 'Plan Name', value: servicePlan.srvname || 'Unknown Plan', valueClass: 'text-[#19b76f] bg-[#12423a] border border-[#28504f] px-3 py-1 rounded-lg' },
+    { label: 'Monthly Price', value: formatCurrency(servicePlan.totalPrice || 0), valueClass: 'text-white/90' },
+    { label: 'Validity', value: `${servicePlan.timeunitexp || 0} days`, valueClass: 'text-[#19b76f]' },
+  ];
+
+  const personalDetailsItems = [
+    { label: 'Name', value: `${userData.firstname || ''} ${userData.lastname || ''}`.trim() || 'N/A', valueClass: 'text-white/90' },
+    { label: 'Email', value: userData.email || 'Not provided', valueClass: 'text-white/90' },
+    { label: 'Phone', value: formatPhoneNumber(userData.phone || userData.mobile || ''), valueClass: 'text-[#19b76f]' },
+  ];
+
+  const usageDetailsItems = [
+    { label: 'Download Used', value: downloadUsed, valueClass: 'text-[#19b76f]' },
+    { label: 'Upload used', value: uploadUsed, valueClass: 'text-[#19b76f]' },
+    { label: 'Total used', value: totalUsed, valueClass: 'text-[#19b76f]' },
+  ];
   
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="grid grid-cols-1 md:grid-cols-2 gap-6"
-      >
-        {/* Account Status Card */}
-        <Card className="border-gray-700/50 bg-gray-900/80 backdrop-blur-sm shadow-2xl hover:shadow-blue-500/10 transition-all duration-300">
-          <CardHeader className="pb-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-blue-500/20 p-3 text-blue-400 ring-1 ring-blue-500/30">
-                <Calendar className="h-6 w-6" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-100">Account Status</h3>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                <span className="text-gray-400 font-medium text-sm">Status</span>
-                <span className={`font-bold px-3 py-1.5 rounded-lg text-xs uppercase tracking-wider ${accountStatus.color} ${accountStatus.bgColor} border ${accountStatus.borderColor}`}>
-                  {accountStatus.status}
-                </span>
-              </div>
-              
-              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                <span className="text-gray-400 font-medium text-sm">Username</span>
-                <span className="text-gray-100 font-bold text-lg">
-                  {originalUsername || 'N/A'}
-                </span>
-              </div>
-              
-              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                <span className="text-gray-400 font-medium text-sm">Expiry Date</span>
-                <span className={`font-semibold text-right text-sm ${accountStatus.status === 'EXPIRED' ? 'text-red-400' : 'text-green-400'}`}>
-                  {formatDate(userData.expiry || '')}
-                </span>
-              </div>
+    <div className="flex flex-col items-center justify-start min-h-[80vh] px-4 py-12 md:px-28">
+      <div className="w-full max-w-7xl">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
+          <motion.h1
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="text-3xl md:text-[32px] font-bold font-['Outfit']"
+          >
+            Account Details
+          </motion.h1>
 
-              {daysToExpiry !== null && (
-                <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                  <span className="text-gray-400 font-medium text-sm">Days to Expiry</span>
-                  <span className={`font-bold text-lg ${
-                    daysToExpiry <= 0 ? 'text-red-400' : 
-                    daysToExpiry <= 7 ? 'text-yellow-400' : 
-                    'text-green-400'
-                  }`}>
-                    {daysToExpiry <= 0 ? 'Expired' : `${daysToExpiry} days`}
-                  </span>
-                </div>
-              )}
-            </div>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="relative w-full md:w-[327px]"
+          >
+            <input
+              type="text"
+              placeholder="Search another account"
+              className="w-full h-[48px] bg-[#17181a] border border-[#303030] rounded-xl pl-4 pr-12 text-sm text-white/50 focus:outline-none focus:border-[#d7ab04] transition-colors"
+            />
+            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-[#767B8B] size-5" />
+          </motion.div>
+        </div>
 
-            {/* Payment Button */}
-            <div className="pt-4 space-y-3 border-t border-gray-700/30">
-              <PaymentButton
-                paystackConfig={paystackConfig}
-                onPaymentSuccess={onPaymentSuccess}
-                onPaymentClose={onPaymentClose}
-                isProcessingPayment={isProcessingPayment}
-                servicePlan={servicePlan}
-              />
-              
-              <p className="text-gray-400 text-xs text-center leading-relaxed">
-                Secure payment powered by Paystack<br />
-                Renew <span className="text-blue-400 font-medium">{servicePlan.srvname || 'your plan'}</span> for {servicePlan.timeunitexp || 30} days
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <AccountCard title="Account status" icon={<User size={18} />}>
+            <div className="flex flex-col gap-2 mb-8">
+              {accountStatusItems.map((item, idx) => (
+                <DataRow key={idx} label={item.label} value={item.value} valueClass={item.valueClass} />
+              ))}
+            </div>
+            <PaymentButton
+              paystackConfig={paystackConfig}
+              onPaymentSuccess={onPaymentSuccess}
+              onPaymentClose={onPaymentClose}
+              isProcessingPayment={isProcessingPayment}
+              servicePlan={servicePlan}
+            />
+            <div className="mt-4 text-center">
+              <p className="text-[10px] text-white/40 mb-1">Secure payment powered by paystack</p>
+              <p className="text-[10px] text-white/60">
+                Renew <span className="font-bold text-[#ffd534]">{servicePlan.srvname || 'your plan'}</span> for {servicePlan.timeunitexp || 30} days
               </p>
             </div>
-          </CardContent>
-        </Card>
+          </AccountCard>
 
-        {/* Current Plan Card */}
-        <Card className="border-gray-700/50 bg-gray-900/80 backdrop-blur-sm shadow-2xl hover:shadow-green-500/10 transition-all duration-300">
-          <CardHeader className="pb-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-green-500/20 p-3 text-green-400 ring-1 ring-green-500/30">
-                <Globe className="h-6 w-6" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-100">Current Plan</h3>
+          <AccountCard title="Current Plan" icon={<Globe size={18} />} showGradient>
+            <div className="flex flex-col gap-2">
+              {currentPlanItems.map((item, idx) => (
+                <DataRow key={idx} label={item.label} value={item.value} valueClass={item.valueClass} />
+              ))}
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="text-center py-4 px-3 bg-gradient-to-r from-green-600/20 to-blue-600/20 rounded-xl border border-green-500/30 ring-1 ring-green-500/10">
-                <span className="text-gray-400 text-xs block mb-2 uppercase tracking-wider font-medium">Plan Name</span>
-                <span className="text-gray-100 font-bold text-lg leading-tight">
-                  {servicePlan.srvname || 'Loading...'}
-                </span>
-              </div>
-              
-              <div className="text-center py-4 px-3 bg-gradient-to-r from-yellow-600/20 to-orange-600/20 rounded-xl border border-yellow-500/30 ring-1 ring-yellow-500/10">
-                <span className="text-gray-400 text-xs block mb-2 uppercase tracking-wider font-medium">Monthly Price</span>
-                <span className="text-yellow-400 font-bold text-2xl">
-                  {formatCurrency(servicePlan.totalPrice || 0)}
-                </span>
-                {(servicePlan.unitpricetax && servicePlan.unitpricetax > 0) && (
-                  <div className="text-xs text-gray-400 mt-2 space-x-1">
-                    <span>Base: {formatCurrency(servicePlan.unitprice || 0)}</span>
-                    <span>•</span>
-                    <span>Tax: {formatCurrency(servicePlan.unitpricetax || 0)}</span>
-                  </div>
-                )}
-              </div>
-              
-              <div className="grid grid-cols-2 gap-3">
-                {servicePlan.timeunitexp && (
-                  <div className="text-center py-3 px-2 bg-blue-600/10 rounded-lg border border-blue-500/20">
-                    <span className="text-gray-400 text-xs block mb-1 uppercase tracking-wider font-medium">Validity</span>
-                    <span className="text-blue-300 font-bold text-sm">
-                      {servicePlan.timeunitexp} days
-                    </span>
-                  </div>
-                )}
+          </AccountCard>
 
-                {servicePlan.poolname && (
-                  <div className="text-center py-3 px-2 bg-purple-600/10 rounded-lg border border-purple-500/20">
-                    <span className="text-gray-400 text-xs block mb-1 uppercase tracking-wider font-medium">IP Pool</span>
-                    <span className="text-purple-300 font-bold text-sm truncate">
-                      {servicePlan.poolname}
-                    </span>
-                  </div>
-                )}
-              </div>
+          <AccountCard title="Account Details" icon={<User size={18} />}>
+            <div className="flex flex-col gap-2">
+              {personalDetailsItems.map((item, idx) => (
+                <DataRow key={idx} label={item.label} value={item.value} valueClass={item.valueClass} />
+              ))}
             </div>
-          </CardContent>
-        </Card>
+          </AccountCard>
 
-        {/* Account Details Card */}
-        <Card className="border-gray-700/50 bg-gray-900/80 backdrop-blur-sm shadow-2xl hover:shadow-purple-500/10 transition-all duration-300">
-          <CardHeader className="pb-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-purple-500/20 p-3 text-purple-400 ring-1 ring-purple-500/30">
-                <User className="h-6 w-6" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-100">Account Details</h3>
+          <AccountCard title="Usage Details" icon={<Globe size={18} />} showGradient>
+            <div className="flex flex-col gap-2">
+              {usageDetailsItems.map((item, idx) => (
+                <DataRow key={idx} label={item.label} value={item.value} valueClass={item.valueClass} />
+              ))}
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                <span className="text-gray-400 font-medium text-sm">Name</span>
-                <span className="text-gray-100 font-semibold text-right text-sm">
-                  {userData.firstname} {userData.lastname}
-                </span>
-              </div>
-              
-              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                <span className="text-gray-400 font-medium text-sm">Email</span>
-                <span className="text-gray-100 font-medium text-right text-sm break-all">
-                  {userData.email || 'Not provided'}
-                </span>
-              </div>
-              
-              <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                <span className="text-gray-400 font-medium text-sm">Phone</span>
-                <span className="text-gray-100 font-medium text-right text-sm">
-                  {formatPhoneNumber(userData.phone || userData.mobile || '')}
-                </span>
-              </div>
-              
-              {(userData.address || userData.city || userData.state || userData.country) && (
-                <div className="py-3 px-3 rounded-lg bg-gray-800/50 border border-gray-700/30">
-                  <span className="text-gray-400 font-medium text-sm block mb-2">Address</span>
-                  <span className="text-gray-100 font-medium text-sm leading-relaxed">
-                    {[userData.address, userData.city, userData.state, userData.country]
-                      .filter(Boolean)
-                      .join(', ')}
-                  </span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Usage Details Card */}
-        <Card className="border-gray-700/50 bg-gray-900/80 backdrop-blur-sm shadow-2xl hover:shadow-orange-500/10 transition-all duration-300">
-          <CardHeader className="pb-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-orange-500/20 p-3 text-orange-400 ring-1 ring-orange-500/30">
-                <CreditCard className="h-6 w-6" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-100">Usage Details</h3>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              {/* Download Usage - Only show if used > 0 */}
-              {formatUsageData(userData.dlbytes || 0).isNegative && (
-                <div className="flex justify-between items-center py-3 px-3 rounded-lg bg-gradient-to-r from-red-600/10 to-red-500/5 border border-red-500/20 ring-1 ring-red-500/10">
-                  <span className="text-gray-400 font-medium text-sm">Download Used</span>
-                  <span className="text-red-400 font-bold text-lg">
-                    {formatUsageData(userData.dlbytes || 0).used}
-                  </span>
-                </div>
-              )}
-              
-              {/* Upload Usage - Only show if used > 0 */}
-              {formatUsageData(userData.ulbytes || 0).isNegative && (
-                <div className="flex justify-between items-center py-3 px-3 rounded-lg bg-gradient-to-r from-pink-600/10 to-pink-500/5 border border-pink-500/20 ring-1 ring-pink-500/10">
-                  <span className="text-gray-400 font-medium text-sm">Upload Used</span>
-                  <span className="text-pink-400 font-bold text-lg">
-                    {formatUsageData(userData.ulbytes || 0).used}
-                  </span>
-                </div>
-              )}
-              
-              {/* Total Used - Show if either download or upload has been used */}
-              {(formatUsageData(userData.dlbytes || 0).isNegative || formatUsageData(userData.ulbytes || 0).isNegative) && (
-                <div className="flex justify-between items-center py-3 px-3 rounded-lg bg-gradient-to-r from-yellow-600/15 to-orange-600/10 border border-yellow-500/30 ring-1 ring-yellow-500/15">
-                  <span className="text-gray-400 font-medium text-sm">Total Used</span>
-                  <span className="text-yellow-400 font-bold text-lg">
-                    {formatBytes(Math.abs(userData.dlbytes || 0) + Math.abs(userData.ulbytes || 0))}
-                  </span>
-                </div>
-              )}
-              
-              {/* Total Remaining - Only show if remaining > 0 */}
-              {!formatUsageData(userData.totalbytes || 0).isNegative && userData.totalbytes && userData.totalbytes > 0 && (
-                <div className="flex justify-between items-center py-3 px-3 rounded-lg bg-gradient-to-r from-green-600/10 to-emerald-600/5 border border-green-500/20 ring-1 ring-green-500/10">
-                  <span className="text-gray-400 font-medium text-sm">Total Remaining</span>
-                  <span className="text-green-400 font-bold text-lg">
-                    {formatUsageData(userData.totalbytes || 0).remaining}
-                  </span>
-                </div>
-              )}
-              
-              {/* Online Time - Only show if > 0 */}
-              {userData.onlinetime && userData.onlinetime > 0 && (
-                <div className="flex justify-between items-center py-3 px-3 rounded-lg bg-gradient-to-r from-blue-600/10 to-cyan-600/5 border border-blue-500/20 ring-1 ring-blue-500/10">
-                  <span className="text-gray-400 font-medium text-sm">Online Time Remaining</span>
-                  <span className="text-blue-400 font-bold text-lg">
-                    {Math.floor(userData.onlinetime / 3600)}h {Math.floor((userData.onlinetime % 3600) / 60)}m
-                  </span>
-                </div>
-              )}
-              
-              {/* Show message if no usage data is available */}
-              {!formatUsageData(userData.dlbytes || 0).isNegative && 
-               !formatUsageData(userData.ulbytes || 0).isNegative && 
-               (!userData.totalbytes || userData.totalbytes <= 0) && 
-               (!userData.onlinetime || userData.onlinetime <= 0) && (
-                <div className="text-center py-8 px-3 bg-gray-600/10 rounded-lg border border-gray-500/20">
-                  <span className="text-gray-400 text-sm">No usage data available</span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+          </AccountCard>
+        </div>
+      </div>
     </div>
   );
 };
+
+function AccountCard({
+  title,
+  icon,
+  children,
+  showGradient = false,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  showGradient?: boolean;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-[#0d0d0d]/64 backdrop-blur-2xl border border-white/10 rounded-2xl p-7 md:p-8 flex flex-col gap-7 relative overflow-hidden"
+    >
+      <div className="flex items-center gap-4">
+        <div className="size-[34px] rounded-lg bg-[#ffd534] flex items-center justify-center text-black border border-black shadow-[0_0_15px_rgba(255,213,52,0.3)]">
+          {icon}
+        </div>
+        <h2 className="text-[21px] font-medium font-['Outfit'] text-white">{title}</h2>
+      </div>
+
+      <div className="relative z-10 flex flex-col h-full">{children}</div>
+
+      {showGradient && (
+        <div className="absolute -bottom-20 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-[#d7ab04]/20 blur-[80px] rounded-full pointer-events-none" />
+      )}
+    </motion.div>
+  );
+}
+
+function DataRow({
+  label,
+  value,
+  valueClass,
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="bg-[#17181a] border border-[#303030] rounded-xl h-[48px] px-4 flex items-center justify-between group hover:border-white/20 transition-colors">
+      <span className="text-[#8c93a5] text-sm font-medium font-['Outfit'] capitalize">{label}</span>
+      <span className={`text-sm font-semibold font-['Outfit'] ${valueClass || ''}`}>{value}</span>
+    </div>
+  );
+}
 
 
 // RenewalForm Component
@@ -751,8 +656,8 @@ const ISPLandingPage: React.FC = () => {
     if (!userData || !servicePlan) return null;
 
     return {
-      reference: `PHS_${Date.now()}_${userData.firstname}_${userData.lastname}`.replace(/\s+/g, '_'),
-      email: userData.email || `${userData.firstname?.toLowerCase()}.${userData.lastname?.toLowerCase()}@phsweb.com`,
+      reference: `CONNEKT_${Date.now()}_${userData.firstname}_${userData.lastname}`.replace(/\s+/g, '_'),
+      email: userData.email || `${userData.firstname?.toLowerCase()}.${userData.lastname?.toLowerCase()}@connekt.me`,
       amount: Math.round((servicePlan.totalPrice || 0) * 100), // Convert to kobo
       publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || 'pk_test_your_public_key_here',
       metadata: {

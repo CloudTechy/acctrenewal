@@ -140,7 +140,7 @@ async function addCreditsToUser(
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'User-Agent': 'PHSWEB-NextJS-App/1.0',
+        'User-Agent': 'Connekt-NextJS-App/1.0',
       },
     });
 
@@ -350,7 +350,7 @@ export async function POST(request: NextRequest) {
           const userResponse = await fetch(userUrl, {
             method: 'GET',
             headers: {
-              'User-Agent': 'PHSWEB-NextJS-App/1.0',
+              'User-Agent': 'Connekt-NextJS-App/1.0',
             },
           });
 
@@ -476,7 +476,7 @@ async function recordTransaction(event: PaystackWebhookEvent, newExpiry?: string
       const serviceResponse = await fetch(serviceUrl, {
         method: 'GET',
         headers: {
-          'User-Agent': 'PHSWEB-NextJS-App/1.0',
+          'User-Agent': 'Connekt-NextJS-App/1.0',
         },
       });
 
@@ -519,7 +519,7 @@ async function recordTransaction(event: PaystackWebhookEvent, newExpiry?: string
       const radiusResponse = await fetch(radiusUrl, {
         method: 'GET',
         headers: {
-          'User-Agent': 'PHSWEB-NextJS-App/1.0',
+          'User-Agent': 'Connekt-NextJS-App/1.0',
         },
       });
 

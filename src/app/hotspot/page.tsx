@@ -843,7 +843,7 @@ export default function HotspotManagementPage() {
                       id="displayName"
                         value={newLocation.display_name}
                         onChange={(e) => setNewLocation({...newLocation, display_name: e.target.value})}
-                      placeholder="e.g., PHSWEB Kano Branch"
+                      placeholder="e.g., Connekt Kano Branch"
                       required
                         className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
                       />
