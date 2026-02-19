@@ -12,7 +12,7 @@ export function Footer() {
   return (
     <footer className="bg-black/40 backdrop-blur-xl border-t border-white/5 w-full pt-20 pb-10 relative overflow-hidden">
       {/* Yellow bottom line as per design */}
-      <div className="absolute bottom-12 left-6 right-6 h-0.5 bg-[#ffd534]" />
+      <div className="absolute bottom-8 left-6 right-6 h-0.5 bg-[#ffd534]" />
       
       <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
