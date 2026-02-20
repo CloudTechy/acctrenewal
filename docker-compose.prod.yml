@@ -27,7 +27,7 @@ services:
       - acctrenewal-network
 
     # --- SECURITY HARDENING ---
-    read_only: true              # Block bots from creating files
+    read_only: true              # Block bots from creating files.
     security_opt:
       - no-new-privileges:true  # Prevent privilege escalation
     tmpfs:
