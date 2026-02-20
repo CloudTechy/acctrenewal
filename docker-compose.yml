@@ -16,10 +16,21 @@ services:
     
     # Mount volume for logs (optional)
     volumes:
-      - ./logs:/app/logs
+      - ./logs:/app/logs:rw
     
     networks:
       - acctrenewal-network
+    
+    # --- SECURITY HARDENING ---
+    read_only: true              # Block bots from creating files
+    security_opt:
+      - no-new-privileges:true  # Prevent privilege escalation
+    tmpfs:
+      - /tmp:size=50M,mode=1777            # RAM-only temp storage
+      - /app/.next/cache:size=100M         # Next.js cache in RAM
+    cap_drop:
+      - ALL                      # Strip all capabilities
+    # ---------------------------
     
     # Health check
     healthcheck:
