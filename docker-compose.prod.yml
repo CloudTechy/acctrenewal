@@ -13,7 +13,7 @@ services:
     container_name: acctrenewal-app
     restart: unless-stopped
     ports:
-      - "0.0.0.0:3000:3000"
+      - "127.0.0.1:3000:3000"
 
     # Load environment variables from .env file
     env_file:
