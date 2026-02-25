@@ -3,6 +3,7 @@
 import React from "react";
 import { Logo } from "./Logo";
 import { Facebook, Instagram, Linkedin } from "lucide-react";
+import { SiTwitterX } from "react-icons/si";
 import { X as XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -23,13 +24,14 @@ export function Footer() {
               Empowering homes and businesses with reliable, lightning-fast broadband solutions. Experience the future of connectivity with CONNEKT.
             </p>
             <div className="flex items-center gap-4">
-              {[Facebook, XIcon, Instagram, Linkedin].map((Icon, idx) => (
+              {[Facebook, SiTwitterX, Instagram, Linkedin].map((Icon, idx) => (
                 <a 
                   key={idx} 
                   href="#" 
                   className="size-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-[#ffd534] hover:border-[#ffd534]/50 hover:bg-[#ffd534]/5 transition-all"
                 >
-                  <Icon size={18} />
+                  {/* Use size prop for lucide icons, fontSize for react-icons */}
+                  {Icon === SiTwitterX ? <SiTwitterX fontSize={18} /> : <Icon size={18} />}
                 </a>
               ))}
             </div>
