@@ -3,8 +3,8 @@
 import React from "react";
 import { Logo } from "./Logo";
 import { Facebook, Instagram, Linkedin } from "lucide-react";
-import { SiTwitterX } from "react-icons/si";
-import { X as XIcon } from "lucide-react";
+import { FaXTwitter  as SiTwitterX } from 'react-icons/fa6';
+// import { SiTwitterX } from "react-icons/si";
 import { useRouter } from "next/navigation";
 
 export function Footer() {
