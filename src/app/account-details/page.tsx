@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { User, Globe, Search } from 'lucide-react';
+import { User, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AccountDetailsPage() {
@@ -49,18 +49,7 @@ export default function AccountDetailsPage() {
             Account Details
           </motion.h1>
 
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="relative w-full md:w-[327px]"
-          >
-            <input
-              type="text"
-              placeholder="Search another account"
-              className="w-full h-[48px] bg-[#17181a] border border-[#303030] rounded-xl pl-4 pr-12 text-sm text-white/50 focus:outline-none focus:border-[#d7ab04] transition-colors"
-            />
-            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-[#767B8B] size-5" />
-          </motion.div>
+          {/* search box removed (duplicate) */}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
