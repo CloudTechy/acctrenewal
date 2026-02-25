@@ -2,7 +2,8 @@
 
 import React from "react";
 import { Logo } from "./Logo";
-import { Facebook, Twitter, Instagram, Linkedin } from "lucide-react";
+import { Facebook, Instagram, Linkedin } from "lucide-react";
+import { X as XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export function Footer() {
@@ -22,7 +23,7 @@ export function Footer() {
               Empowering homes and businesses with reliable, lightning-fast broadband solutions. Experience the future of connectivity with CONNEKT.
             </p>
             <div className="flex items-center gap-4">
-              {[Facebook, Twitter, Instagram, Linkedin].map((Icon, idx) => (
+              {[Facebook, XIcon, Instagram, Linkedin].map((Icon, idx) => (
                 <a 
                   key={idx} 
                   href="#" 
