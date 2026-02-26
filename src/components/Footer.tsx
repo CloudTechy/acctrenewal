@@ -24,16 +24,32 @@ export function Footer() {
               Empowering homes and businesses with reliable, lightning-fast broadband solutions. Experience the future of connectivity with CONNEKT.
             </p>
             <div className="flex items-center gap-4">
-              {[Facebook, SiTwitterX, Instagram, Linkedin].map((Icon, idx) => (
-                <a 
-                  key={idx} 
-                  href="#" 
-                  className="size-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-[#ffd534] hover:border-[#ffd534]/50 hover:bg-[#ffd534]/5 transition-all"
-                >
-                  {/* Use size prop for lucide icons, fontSize for react-icons */}
-                  {Icon === SiTwitterX ? <SiTwitterX fontSize={18} /> : <Icon size={18} />}
-                </a>
-              ))}
+              <a
+                href="https://www.facebook.com/share/14XeryKkcLQ/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="size-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-[#ffd534] hover:border-[#ffd534]/50 hover:bg-[#ffd534]/5 transition-all"
+              >
+                <Facebook size={18} />
+              </a>
+
+              <a
+                href="https://x.com/ConnektOnline"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="size-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-[#ffd534] hover:border-[#ffd534]/50 hover:bg-[#ffd534]/5 transition-all"
+              >
+                <SiTwitterX fontSize={18} />
+              </a>
+
+              <a
+                href="https://www.connekt.me"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="size-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-[#ffd534] hover:border-[#ffd534]/50 hover:bg-[#ffd534]/5 transition-all"
+              >
+                <Linkedin size={18} />
+              </a>
             </div>
           </div>
 
