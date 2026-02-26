@@ -500,19 +500,21 @@ const UserDetails: React.FC<UserDetailsProps> = ({
             />
             <div className="mt-4 text-center">
               <p className="text-[10px] text-white/40 mb-1">Secure payment powered by paystack</p>
-              <p className="text-[10px] text-white/60">
-                Renew <span className="font-bold text-[#ffd534]">{servicePlan.srvname || 'your plan'}</span> for {servicePlan.timeunitexp || 30} days
+                <p className="text-[10px] text-white/60">
+                Renew <span className="font-bold text-[#ffd534] md:whitespace-nowrap">{servicePlan.srvname || 'your plan'}</span> for {servicePlan.timeunitexp || 30} days
               </p>
             </div>
           </AccountCard>
 
-          <AccountCard title="Current Plan" icon={<Globe size={18} />} showGradient>
-            <div className="flex flex-col gap-2">
-              {currentPlanItems.map((item, idx) => (
-                <DataRow key={idx} label={item.label} value={item.value} valueClass={item.valueClass} />
-              ))}
-            </div>
-          </AccountCard>
+          {/* <div className="md:col-span-2"> */}
+            <AccountCard title="Current Plan" icon={<Globe size={18} />} showGradient>
+              <div className="flex flex-col gap-2">
+                {currentPlanItems.map((item, idx) => (
+                  <DataRow key={idx} label={item.label} value={item.value} valueClass={item.valueClass} />
+                ))}
+              </div>
+            </AccountCard>
+          {/* </div> */}
 
           <AccountCard title="Account Details" icon={<User size={18} />}>
             <div className="flex flex-col gap-2">
@@ -550,7 +552,7 @@ function AccountCard({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-[#0d0d0d]/64 backdrop-blur-2xl border border-white/10 rounded-2xl p-7 md:p-8 flex flex-col gap-7 relative overflow-hidden"
+      className="bg-[#0d0d0d]/64 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 md:p-3 flex flex-col gap-9 relative overflow-visible"
     >
       <div className="flex items-center gap-4">
         <div className="size-[34px] rounded-lg bg-[#ffd534] flex items-center justify-center text-black border border-black shadow-[0_0_15px_rgba(255,213,52,0.3)]">

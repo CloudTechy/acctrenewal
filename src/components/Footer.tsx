@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Logo } from "./Logo";
-import { Facebook, Linkedin } from "lucide-react";
+import { Facebook } from "lucide-react";
 import { FaXTwitter  as SiTwitterX } from 'react-icons/fa6';
 // import { SiTwitterX } from "react-icons/si";
 import { useRouter } from "next/navigation";
@@ -44,14 +44,7 @@ export function Footer() {
 
               
 
-              <a
-                href="https://www.connekt.me"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="size-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-[#ffd534] hover:border-[#ffd534]/50 hover:bg-[#ffd534]/5 transition-all"
-              >
-                <Linkedin size={18} />
-              </a>
+              
             </div>
           </div>
 
