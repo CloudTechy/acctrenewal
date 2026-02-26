@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Logo } from "./Logo";
-import { Facebook, Instagram, Linkedin } from "lucide-react";
+import { Facebook, Linkedin } from "lucide-react";
 import { FaXTwitter  as SiTwitterX } from 'react-icons/fa6';
 // import { SiTwitterX } from "react-icons/si";
 import { useRouter } from "next/navigation";
@@ -41,6 +41,8 @@ export function Footer() {
               >
                 <SiTwitterX fontSize={18} />
               </a>
+
+              
 
               <a
                 href="https://www.connekt.me"
