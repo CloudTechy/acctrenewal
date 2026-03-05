@@ -1,12 +1,12 @@
 version: '3.8'
 
-# Production Docker Compose configuration
-# Usage: docker-compose -f docker-compose.prod.yml up -d
+# Staging Docker Compose configuration
+# Usage: docker-compose -f docker-compose.staging.yml up -d
 
 services:
-  # Next.js Application (Production)
+  # Next.js Application (Staging)
   acctrenewal-app:
-    image: cloudtechy/acctrenewal:prod
+    image: cloudtechy/acctrenewal:staging
     build:
       context: .
       dockerfile: Dockerfile
@@ -15,9 +15,9 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
 
-    # Load environment variables from .env file
+    # Load environment variables from .env.staging file
     env_file:
-      - .env
+      - .env.staging
 
     # Mount volume for logs (optional)
     volumes:
@@ -27,14 +27,14 @@ services:
       - acctrenewal-network
 
     # --- SECURITY HARDENING ---
-    read_only: true              # Block bots from creating files.
+    read_only: true
     security_opt:
-      - no-new-privileges:true  # Prevent privilege escalation
+      - no-new-privileges:true
     tmpfs:
-      - /tmp:size=50M,mode=1777            # RAM-only temp storage
-      - /app/.next/cache:size=100M         # Next.js cache in RAM
+      - /tmp:size=50M,mode=1777
+      - /app/.next/cache:size=100M
     cap_drop:
-      - ALL                      # Strip all capabilities
+      - ALL
     # ---------------------------
 
     # Health check
@@ -71,13 +71,14 @@ services:
     environment:
       - PORT=3001
       - APP_DIR=/app
-      - DOCKER_COMPOSE_FILE=docker-compose.prod.yml
+      - DOCKER_COMPOSE_FILE=docker-compose.staging.yml
       - DOCKER_COMPOSE_CMD=docker compose
       - DOCKER_COMPOSE_FILE_PROD=docker-compose.prod.yml
       - DOCKER_COMPOSE_FILE_STAGING=docker-compose.staging.yml
     volumes:
       - ./:/app
       - /var/run/docker.sock:/var/run/docker.sock
+      - /root/.docker/config.json:/root/.docker/config.json:ro
     networks:
       - acctrenewal-network
 

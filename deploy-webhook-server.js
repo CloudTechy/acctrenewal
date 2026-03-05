@@ -11,7 +11,7 @@
  *   - APP_DIR: Application directory (default: ~/acctrenewal)
  *   - DOCKER_COMPOSE_FILE: Docker compose file name (default: docker-compose.yml)
  *   - DOCKER_COMPOSE_FILE_PROD: Docker compose file for production (default: docker-compose.prod.yml)
- *   - DOCKER_COMPOSE_FILE_STAGING: Docker compose file for staging (default: docker-compose.yml)
+ *   - DOCKER_COMPOSE_FILE_STAGING: Docker compose file for staging (default: docker-compose.staging.yml)
  */
 
 const http = require('http');
@@ -34,7 +34,7 @@ const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'your-webhook-secret';
 const APP_DIR = expandHome(process.env.APP_DIR || '~/acctrenewal');
 const COMPOSE_FILE = process.env.DOCKER_COMPOSE_FILE || 'docker-compose.yml';
 const COMPOSE_FILE_PROD = process.env.DOCKER_COMPOSE_FILE_PROD || 'docker-compose.prod.yml';
-const COMPOSE_FILE_STAGING = process.env.DOCKER_COMPOSE_FILE_STAGING || COMPOSE_FILE;
+const COMPOSE_FILE_STAGING = process.env.DOCKER_COMPOSE_FILE_STAGING || 'docker-compose.staging.yml';
 const COMPOSE_CMD = process.env.DOCKER_COMPOSE_CMD || 'docker compose';
 const LOG_FILE = path.join(APP_DIR, 'deploy.log');
 
@@ -115,8 +115,10 @@ const handleDeployment = async (data) => {
 
     // Step 4: Load environment variables
     log(`⚙️  Loading environment variables...`);
-    if (!fs.existsSync(path.join(APP_DIR, '.env.local'))) {
-      log(`⚠️  Warning: .env.local not found in ${APP_DIR}`);
+    const envFile = deployEnv === 'production' ? '.env' : '.env.staging';
+    const envFilePath = path.join(APP_DIR, envFile);
+    if (!fs.existsSync(envFilePath)) {
+      log(`⚠️  Warning: ${envFile} not found in ${APP_DIR}`);
     }
 
     // Step 5: Backup current docker-compose.yml
@@ -197,7 +199,7 @@ const handleDeployment = async (data) => {
     try {
       // Find latest backup by listing and sorting
       const backupFiles = fs.readdirSync(APP_DIR)
-        .filter(f => f.startsWith(`${COMPOSE_FILE}.backup.`))
+        .filter(f => f.startsWith(`${composeFile}.backup.`))
         .sort()
         .reverse();
       

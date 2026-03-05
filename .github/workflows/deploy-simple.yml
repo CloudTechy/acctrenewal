@@ -27,9 +27,9 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    environment: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_environment == 'production') || github.ref_name == 'master' && 'production' || 'staging' }}
+    environment: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_environment) || (github.ref_name == 'master' && 'production' || 'staging') }}
     env:
-      DEPLOY_ENV: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_environment == 'production') || github.ref_name == 'master' && 'production' || 'staging' }}
+      DEPLOY_ENV: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_environment) || (github.ref_name == 'master' && 'production' || 'staging') }}
     
     steps:
       - name: Checkout repository
