@@ -109,7 +109,12 @@ async function testWebhook(webhookUrl, secretKey) {
 
 // Usage
 const WEBHOOK_URL = process.env.WEBHOOK_URL || 'https://75ea-102-91-35-74.ngrok-free.app/api/webhook/paystack';
-const SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || 'sk_test_a11a42a8e399e24db114b6f84fe71bb71aff3510';
+const SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
+
+if (!SECRET_KEY) {
+  console.error('❌ Missing PAYSTACK_SECRET_KEY. Set it before running this script.');
+  process.exit(1);
+}
 
 // Run test if this is the main module
 testWebhook(WEBHOOK_URL, SECRET_KEY);
