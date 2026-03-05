@@ -71,6 +71,7 @@ jobs:
             type=raw,value=prod,enable={{is_default_branch}}
             type=raw,value=staging,enable=${{ github.ref_name == 'dev/cloudtechy' || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_environment == 'staging') }}
 
+    
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -80,6 +81,10 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          no-cache: true
+          build-args: |
+            NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=${{ secrets.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY }}
+            
 
       - name: Trigger VPS webhook deployment
         if: |
