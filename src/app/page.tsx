@@ -390,13 +390,24 @@ const PaymentButton: React.FC<{
     setIsMounted(true);
   }, []);
 
-  if (!isMounted || !paystackConfig) {
+  if (!isMounted) {
     return (
       <Button 
         disabled={true}
         className={buttonClassName}
       >
         <span>Loading Payment...</span>
+      </Button>
+    );
+  }
+
+  if (!paystackConfig) {
+    return (
+      <Button 
+        disabled={true}
+        className={buttonClassName}
+      >
+        <span>Payment unavailable</span>
       </Button>
     );
   }
@@ -644,12 +655,18 @@ const ISPLandingPage: React.FC = () => {
   // Paystack configuration
   const generatePaystackConfig = () => {
     if (!userData || !servicePlan) return null;
+    const paystackPublicKey = (process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '').trim();
+    const isValidPaystackKey = /^pk_(live|test)_[A-Za-z0-9]+$/.test(paystackPublicKey);
+
+    if (!isValidPaystackKey) {
+      return null;
+    }
 
     return {
       reference: `CONNEKT_${Date.now()}_${userData.firstname}_${userData.lastname}`.replace(/\s+/g, '_'),
       email: userData.email || `${userData.firstname?.toLowerCase()}.${userData.lastname?.toLowerCase()}@connekt.me`,
       amount: Math.round((servicePlan.totalPrice || 0) * 100), // Convert to kobo
-      publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || 'pk_test_your_public_key_here',
+      publicKey: paystackPublicKey,
       metadata: {
         // Direct metadata properties for easier access in webhook
         username: originalUsername,
@@ -907,7 +924,7 @@ const ISPLandingPage: React.FC = () => {
               {/* Account Updated Success Indicator */}
               {showAccountUpdated && (
                 <div className="rounded-2xl bg-gradient-to-r from-green-600/90 to-emerald-600/90 backdrop-blur-sm p-4 text-white animate-fadeIn shadow-xl border border-green-500/30">
-                  <p className="font-semibold text-center">✓ Account Updated Successfully!</p>
+                  <p className="font-semibold text-center">âœ“ Account Updated Successfully!</p>
                   <p className="text-green-100 text-sm text-center mt-1">Your subscription has been renewed and account information refreshed.</p>
                 </div>
               )}
@@ -946,8 +963,8 @@ const ISPLandingPage: React.FC = () => {
                   transition={{ delay: 1 }}
                   className="mt-4 flex items-center justify-center gap-4 text-xs text-white/40"
                 >
-                  <span className="flex items-center gap-1">✓ Instant Activation</span>
-                  <span className="flex items-center gap-1">✓ 24/7 Support</span>
+                  <span className="flex items-center gap-1">âœ“ Instant Activation</span>
+                  <span className="flex items-center gap-1">âœ“ 24/7 Support</span>
                 </motion.div>
 
                 {error && (

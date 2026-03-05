@@ -67,11 +67,44 @@ jobs:
           tags: |
             type=ref,event=branch
             type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=prod,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref_name == 'master' || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_environment == 'production') }}
+            type=raw,value=prod,enable=${{ github.ref_name == 'master' || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_environment == 'production') }}
             type=raw,value=staging,enable=${{ github.ref_name == 'dev/cloudtechy' || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_environment == 'staging') }}
 
-    
+
+      - name: Validate Paystack key for build
+        if: github.event_name != 'pull_request'
+        env:
+          NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY }}
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+        run: |
+          if [ -z "$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY" ]; then
+            echo "ERROR: NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY secret is missing"
+            exit 1
+          fi
+
+          if [ "$DEPLOY_ENV" = "production" ]; then
+            case "$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY" in
+              pk_live_*)
+                echo "OK: Production Paystack key format is valid"
+                ;;
+              *)
+                echo "ERROR: Production requires a pk_live_ Paystack key"
+                exit 1
+                ;;
+            esac
+          else
+            case "$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY" in
+              pk_live_*|pk_test_*)
+                echo "OK: Non-production Paystack key format is valid"
+                ;;
+              *)
+                echo "ERROR: Paystack key must start with pk_live_ or pk_test_"
+                exit 1
+                ;;
+            esac
+          fi
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -115,7 +148,7 @@ jobs:
           fi
           
           if [ -z "$WEBHOOK_URL" ] || [ -z "$WEBHOOK_SECRET" ]; then
-            echo "⚠️  Warning: VPS_WEBHOOK_URL or VPS_WEBHOOK_SECRET not configured, skipping deployment"
+            echo "WARNING: VPS_WEBHOOK_URL or VPS_WEBHOOK_SECRET not configured, skipping deployment"
             exit 0
           fi
           
@@ -137,7 +170,7 @@ jobs:
           
           # Send webhook with retries
           for attempt in {1..3}; do
-            echo "📤 Sending webhook (attempt $attempt/3)..."
+            echo "Sending webhook (attempt $attempt/3)..."
             if curl -X POST "$WEBHOOK_URL" \
               -H "Content-Type: application/json" \
               -H "X-Webhook-Signature: $SIGNATURE" \
@@ -145,16 +178,15 @@ jobs:
               --max-time 10 \
               --silent \
               --show-error; then
-              echo "✅ Webhook sent successfully"
+              echo "Webhook sent successfully"
               exit 0
             fi
             if [ $attempt -lt 3 ]; then
-              echo "⏳ Retrying in 5 seconds..."
+              echo "Retrying in 5 seconds..."
               sleep 5
             fi
           done
-          
-          echo "❌ Webhook delivery failed after 3 attempts"
+          echo "Webhook delivery failed after 3 attempts"
           exit 1
         continue-on-error: true
 
@@ -173,7 +205,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*✅ Build & Push Successful*\nEnv: ${{ env.DEPLOY_ENV }}\nBranch: ${{ github.ref_name }}\nImage: ${{ env.IMAGE_NAME }}:${{ env.DEPLOY_ENV == 'production' && 'prod' || 'staging' }}\nAuthor: ${{ github.actor }}\nCommit: ${{ github.sha }}"
+                    "text": "*Build & Push Successful*\\nEnv: ${{ env.DEPLOY_ENV }}\\nBranch: ${{ github.ref_name }}\\nImage: ${{ env.IMAGE_NAME }}:${{ env.DEPLOY_ENV == 'production' && 'prod' || 'staging' }}\\nAuthor: ${{ github.actor }}\\nCommit: ${{ github.sha }}"
                   }
                 }
               ]
@@ -195,7 +227,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*❌ Build Failed*\nEnv: ${{ env.DEPLOY_ENV }}\nBranch: ${{ github.ref_name }}\nAuthor: ${{ github.actor }}\nCommit: ${{ github.sha }}\nLink: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    "text": "*Build Failed*\\nEnv: ${{ env.DEPLOY_ENV }}\\nBranch: ${{ github.ref_name }}\\nAuthor: ${{ github.actor }}\\nCommit: ${{ github.sha }}\\nLink: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   }
                 }
               ]
