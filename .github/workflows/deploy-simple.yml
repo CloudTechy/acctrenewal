@@ -95,11 +95,15 @@ jobs:
             esac
           else
             case "$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY" in
-              pk_live_*|pk_test_*)
-                echo "OK: Non-production Paystack key format is valid"
+              pk_test_*)
+                echo "OK: Staging Paystack key format is valid"
+                ;;
+              pk_live_*)
+                echo "ERROR: Staging requires a pk_test_ Paystack key (pk_live_ is not allowed)"
+                exit 1
                 ;;
               *)
-                echo "ERROR: Paystack key must start with pk_live_ or pk_test_"
+                echo "ERROR: Staging Paystack key must start with pk_test_"
                 exit 1
                 ;;
             esac
