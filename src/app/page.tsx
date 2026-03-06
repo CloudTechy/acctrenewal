@@ -702,9 +702,30 @@ const ISPLandingPage: React.FC = () => {
       return null;
     }
 
+    // Generate valid email with proper fallback
+    let email = userData.email;
+    if (!email || !email.includes('@')) {
+      // Only generate if both firstname and lastname exist
+      if (userData.firstname && userData.lastname) {
+        email = `${userData.firstname.toLowerCase()}.${userData.lastname.toLowerCase()}@connekt.me`;
+      } else if (userData.firstname) {
+        email = `${userData.firstname.toLowerCase()}@connekt.me`;
+      } else if (originalUsername) {
+        // Check if username is already an email
+        if (originalUsername.includes('@')) {
+          email = originalUsername;
+        } else {
+          email = `${originalUsername}@connekt.me`;
+        }
+      } else {
+        // Last resort - use placeholder
+        email = 'customer@connekt.me';
+      }
+    }
+
     return {
       reference: `CONNEKT_${Date.now()}_${userData.firstname}_${userData.lastname}`.replace(/\s+/g, '_'),
-      email: userData.email || `${userData.firstname?.toLowerCase()}.${userData.lastname?.toLowerCase()}@connekt.me`,
+      email: email,
       amount: Math.round((servicePlan.totalPrice || 0) * 100), // Convert to kobo
       publicKey: paystackPublicKey,
       metadata: {
