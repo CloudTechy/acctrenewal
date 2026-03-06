@@ -6,6 +6,7 @@ import { Search, Globe, User } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import toast, { Toaster } from 'react-hot-toast';
 
 // Dynamically import Paystack to avoid SSR issues
 const PaystackButton = dynamic(
@@ -723,8 +724,13 @@ const ISPLandingPage: React.FC = () => {
       }
     }
 
+    // Generate clean reference without trailing underscores
+    const timestamp = Date.now();
+    const userIdentifier = originalUsername.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
+    const cleanReference = `CONNEKT_${timestamp}_${userIdentifier}`;
+
     return {
-      reference: `CONNEKT_${Date.now()}_${userData.firstname}_${userData.lastname}`.replace(/\s+/g, '_'),
+      reference: cleanReference,
       email: email,
       amount: Math.round((servicePlan.totalPrice || 0) * 100), // Convert to kobo
       publicKey: paystackPublicKey,
@@ -811,6 +817,9 @@ const ISPLandingPage: React.FC = () => {
   const handlePaymentSuccess = async (reference: PaystackReference) => {
     console.log('Payment successful:', reference);
     setIsProcessingPayment(true);
+    
+    // Show processing toast
+    toast.loading('Verifying payment and activating renewal...', { id: 'payment-process' });
 
     try {
       // Call renewal API to process the subscription renewal
@@ -836,6 +845,12 @@ const ISPLandingPage: React.FC = () => {
       if (renewalResult.success) {
         console.log('Renewal response:', renewalResult);
         
+        // Dismiss loading toast and show success
+        toast.success(
+          `Account renewed successfully! ${renewalResult.newExpiry ? 'New expiry: ' + formatDate(renewalResult.newExpiry) : ''}`,
+          { id: 'payment-process', duration: 5000 }
+        );
+        
         // If we have newExpiry from API, use it immediately
         if (renewalResult.newExpiry && userData) {
           console.log('Updating account with new expiry from API:', renewalResult.newExpiry);
@@ -850,6 +865,7 @@ const ISPLandingPage: React.FC = () => {
         } else {
           // Fallback: try to refresh from API
           console.log('No newExpiry in response, fetching fresh account data...');
+          toast.loading('Refreshing account data...', { id: 'refresh' });
           
           try {
             const refreshedUserResult = await getUserData(originalUsername);
@@ -864,27 +880,39 @@ const ISPLandingPage: React.FC = () => {
               }
               
               console.log('Account data refreshed successfully');
+              toast.success('Account data refreshed', { id: 'refresh' });
               setShowAccountUpdated(true);
               setTimeout(() => setShowAccountUpdated(false), 3000);
               
             } else {
               console.error('Failed to refresh user data:', refreshedUserResult.str || 'Unknown error');
+              toast.error('Payment processed, but could not refresh account details. Please refresh the page.', { id: 'refresh', duration: 6000 });
               setError('Payment processed, but could not refresh account details. Please refresh the page.');
             }
           } catch (refreshError) {
             console.error('Error refreshing account data:', refreshError);
+            toast.error('Payment processed, but could not refresh account details. Please refresh the page.', { id: 'refresh', duration: 6000 });
             setError('Payment processed, but could not refresh account details. Please refresh the page.');
           }
         }
         
       } else {
+        // Show error toast with reference
+        toast.error(
+          `${renewalResult.error || 'Failed to process renewal'}${renewalResult.reference ? '\nReference: ' + renewalResult.reference : ''}`,
+          { id: 'payment-process', duration: 8000 }
+        );
         setError(renewalResult.error || 'Failed to process renewal');
       }
     } catch (err) {
       console.error('Renewal processing error:', err);
-      setError('Failed to process renewal. Please contact support.');
+      const errorMessage = 'Failed to process renewal. Please contact support with your payment reference.';
+      toast.error(errorMessage, { id: 'payment-process', duration: 8000 });
+      setError(errorMessage + ` (Ref: ${reference.reference})`);
     } finally {
       setIsProcessingPayment(false);
+      // Dismiss any lingering loading toasts
+      toast.dismiss('payment-process');
     }
   };
 
@@ -902,6 +930,31 @@ const ISPLandingPage: React.FC = () => {
 
   return (
     <>
+      {/* Toast Notifications */}
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#1a1a1a',
+            color: '#fff',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+          },
+          success: {
+            iconTheme: {
+              primary: '#19b76f',
+              secondary: '#1a1a1a',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#eb5345',
+              secondary: '#1a1a1a',
+            },
+          },
+        }}
+      />
+      
       <style jsx global>{`
         @keyframes fadeIn {
           from {

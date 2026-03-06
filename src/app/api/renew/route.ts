@@ -1,6 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
+// Environment validation
+const validateEnvironment = () => {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  
+  // Critical: Paystack (required for payment verification)
+  if (!process.env.PAYSTACK_SECRET_KEY) {
+    errors.push('PAYSTACK_SECRET_KEY not configured');
+  } else if (!process.env.PAYSTACK_SECRET_KEY.startsWith('sk_')) {
+    errors.push('PAYSTACK_SECRET_KEY has invalid format (must start with sk_)');
+  }
+  
+  // Optional: Supabase (only needed for analytics/tracking)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'not-set';
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'not-set';
+  const isSupabaseConfigured = supabaseUrl && !supabaseUrl.includes('your-project') && !supabaseUrl.includes('dummy') && supabaseServiceKey !== 'dummy_service_role';
+  
+  if (!isSupabaseConfigured) {
+    warnings.push('Supabase not configured - renewals will work but transactions won\'t be logged');
+  }
+  
+  console.log('[ENV_CHECK] Configuration status:', {
+    paystackConfigured: errors.length === 0,
+    paystackKeyPrefix: process.env.PAYSTACK_SECRET_KEY?.substring(0, 10),
+    supabaseConfigured: isSupabaseConfigured,
+    supabaseUrl: isSupabaseConfigured ? supabaseUrl : 'not-configured'
+  });
+  
+  if (errors.length > 0) {
+    console.error('[ENV_CHECK] CRITICAL configuration errors:', errors);
+  }
+  
+  if (warnings.length > 0) {
+    console.warn('[ENV_CHECK] Configuration warnings:', warnings);
+  }
+  
+  return { errors, warnings };
+};
+
+// Validate on module load
+const envValidation = validateEnvironment();
+
 // RADIUS API Configuration
 const RADIUS_API_CONFIG = {
   baseUrl: process.env.RADIUS_API_URL || 'http://165.227.177.208/radiusmanager/api/sysapi.php',
@@ -55,61 +97,153 @@ const normalizeRenewalUnit = (value?: string): RenewalUnit => {
 
 // Verify Paystack transaction
 const verifyPaystackTransaction = async (reference: string): Promise<PaystackVerificationResult> => {
+  const verificationUrl = `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`;
+  
   try {
-    const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+    console.log('[PAYMENT_VERIFY] Starting verification', { 
+      reference, 
+      timestamp: new Date().toISOString(),
+      url: verificationUrl,
+      secretKeyPrefix: process.env.PAYSTACK_SECRET_KEY?.substring(0, 10) || 'NOT_SET'
+    });
+
+    if (!process.env.PAYSTACK_SECRET_KEY) {
+      console.error('[PAYMENT_VERIFY] CRITICAL: PAYSTACK_SECRET_KEY not configured');
+      return { verified: false, amountNaira: 0 };
+    }
+
+    const response = await fetch(verificationUrl, {
       headers: {
         Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
         'Content-Type': 'application/json',
       },
     });
 
+    const data = await response.json();
+    
+    console.log('[PAYMENT_VERIFY] Paystack API response', {
+      httpStatus: response.status,
+      httpStatusText: response.statusText,
+      paystackStatus: data.status,
+      transactionStatus: data.data?.status,
+      amount: data.data?.amount,
+      amountNaira: Number(data.data?.amount || 0) / 100,
+      currency: data.data?.currency,
+      message: data.message,
+      reference: reference,
+      responseOk: response.ok
+    });
+
     if (!response.ok) {
-      console.error('Paystack verification failed:', response.statusText);
+      console.error('[PAYMENT_VERIFY] API error', {
+        status: response.status,
+        statusText: response.statusText,
+        message: data.message,
+        reference: reference,
+        fullResponse: JSON.stringify(data)
+      });
       return { verified: false, amountNaira: 0 };
     }
-
-    const data = await response.json();
-    console.log('Paystack verification response:', data);
 
     const verified = data.status === true && data.data?.status === 'success';
     const amountNaira = Number(data.data?.amount || 0) / 100;
 
+    console.log('[PAYMENT_VERIFY] Verification result', {
+      verified,
+      amountNaira,
+      reference
+    });
+
     return { verified, amountNaira };
   } catch (error) {
-    console.error('Error verifying Paystack transaction:', error);
+    console.error('[PAYMENT_VERIFY] Exception occurred', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      reference: reference
+    });
     return { verified: false, amountNaira: 0 };
   }
 };
 
 const getExistingRenewalTransaction = async (reference: string): Promise<ExistingRenewalTransaction | null> => {
-  const { data, error } = await supabaseAdmin
-    .from('renewal_transactions')
-    .select('id, payment_status, renewal_end_date')
-    .eq('paystack_reference', reference)
-    .maybeSingle();
-
-  if (error) {
-    console.error('Error checking existing renewal transaction:', error);
+  // Check if Supabase is configured
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const isSupabaseConfigured = supabaseUrl && !supabaseUrl.includes('your-project') && !supabaseUrl.includes('dummy');
+  
+  if (!isSupabaseConfigured) {
+    console.log('[EXISTING_TRANSACTION] Supabase not configured, skipping idempotency check');
     return null;
   }
 
-  return data ?? null;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('renewal_transactions')
+      .select('id, payment_status, renewal_end_date')
+      .eq('paystack_reference', reference)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[EXISTING_TRANSACTION] Error checking existing renewal transaction:', {
+        reference,
+        error,
+        message: error.message,
+        details: error.details
+      });
+      return null;
+    }
+
+    return data ?? null;
+  } catch (error) {
+    console.error('[EXISTING_TRANSACTION] Exception checking existing transaction:', { reference, error });
+    return null;
+  }
 };
 
 // Get or create customer for analytics
 const getOrCreateCustomer = async (username: string): Promise<{ id: string | null; account_owner_id: string | null }> => {
   try {
+    console.log('[GET_OR_CREATE_CUSTOMER] Starting for username:', username);
+    
+    // Check if Supabase is properly configured
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const isSupabaseConfigured = supabaseUrl && !supabaseUrl.includes('your-project') && !supabaseUrl.includes('dummy');
+    
+    if (!isSupabaseConfigured) {
+      console.warn('[GET_OR_CREATE_CUSTOMER] Supabase not configured, skipping database operations');
+      // Return dummy values to allow payment processing without database
+      return { 
+        id: `temp_${username.replace(/[^a-zA-Z0-9]/g, '_')}`, 
+        account_owner_id: null 
+      };
+    }
+    
     // Try to find existing customer
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: findError } = await supabaseAdmin
       .from('customers')
       .select('id, account_owner_id')
       .eq('username', username)
       .maybeSingle();
 
+    if (findError) {
+      console.error('[GET_OR_CREATE_CUSTOMER] Error finding customer:', { 
+        username, 
+        error: findError,
+        code: findError.code,
+        message: findError.message 
+      });
+    }
+
     if (existing) {
+      console.log('[GET_OR_CREATE_CUSTOMER] Found existing customer:', { 
+        username, 
+        id: existing.id, 
+        accountOwnerId: existing.account_owner_id 
+      });
       return { id: existing.id, account_owner_id: existing.account_owner_id };
     }
 
+    console.log('[GET_OR_CREATE_CUSTOMER] No existing customer, creating new...');
+    
     // Create new customer if not found
     const { data: newCustomer, error: createError } = await supabaseAdmin
       .from('customers')
@@ -118,16 +252,29 @@ const getOrCreateCustomer = async (username: string): Promise<{ id: string | nul
       .maybeSingle();
 
     if (createError) {
-      console.error('Error creating customer:', createError);
+      console.error('[GET_OR_CREATE_CUSTOMER] Error creating customer:', { 
+        username, 
+        error: createError,
+        code: createError.code,
+        message: createError.message,
+        details: createError.details,
+        hint: createError.hint
+      });
       return { id: null, account_owner_id: null };
     }
+
+    console.log('[GET_OR_CREATE_CUSTOMER] Created new customer:', { 
+      username, 
+      id: newCustomer?.id, 
+      accountOwnerId: newCustomer?.account_owner_id 
+    });
 
     return { 
       id: newCustomer?.id || null, 
       account_owner_id: newCustomer?.account_owner_id || null 
     };
   } catch (error) {
-    console.error('Error in getOrCreateCustomer:', error);
+    console.error('[GET_OR_CREATE_CUSTOMER] Exception:', { username, error });
     return { id: null, account_owner_id: null };
   }
 };
@@ -137,6 +284,19 @@ const updateRenewalTransactionStatus = async (
   paymentStatus: 'success' | 'failed',
   newExpiry?: string | null
 ) => {
+  // Check if Supabase is configured
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const isSupabaseConfigured = supabaseUrl && !supabaseUrl.includes('your-project') && !supabaseUrl.includes('dummy');
+  
+  if (!isSupabaseConfigured) {
+    console.log('[UPDATE_TRANSACTION] Supabase not configured, skipping database update', { 
+      reference, 
+      paymentStatus, 
+      newExpiry 
+    });
+    return;
+  }
+
   const updatePayload: {
     payment_status: 'success' | 'failed';
     renewal_end_date?: string;
@@ -154,7 +314,9 @@ const updateRenewalTransactionStatus = async (
     .eq('paystack_reference', reference);
 
   if (error) {
-    console.error('Error updating renewal transaction status:', error);
+    console.error('[UPDATE_TRANSACTION] Error updating renewal transaction status:', error);
+  } else {
+    console.log('[UPDATE_TRANSACTION] Successfully updated transaction:', { reference, paymentStatus });
   }
 };
 
@@ -181,18 +343,42 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!reference || !username || !Number.isFinite(servicePlanId) || servicePlanId <= 0 || !Number.isFinite(renewalPeriod) || renewalPeriod <= 0) {
+      console.error('[RENEW_API] Missing required fields', { reference, username, srvid, timeunitexp });
       return NextResponse.json({ 
-        error: 'Missing required fields' 
+        error: 'Missing required fields',
+        details: 'Please ensure all payment information is included'
       }, { status: 400 });
+    }
+
+    // Check critical environment configuration (Paystack only)
+    if (envValidation.errors.length > 0) {
+      console.error('[RENEW_API] CRITICAL environment configuration error', { errors: envValidation.errors });
+      return NextResponse.json({ 
+        error: 'Server configuration error. Please contact support.',
+        details: envValidation.errors.join(', ')
+      }, { status: 500 });
+    }
+    
+    // Log warnings but proceed (Supabase is optional)
+    if (envValidation.warnings.length > 0) {
+      console.warn('[RENEW_API] Configuration warnings (non-blocking):', envValidation.warnings);
     }
 
     // Verify payment exists with Paystack before processing
     const verification = await verifyPaystackTransaction(reference);
     if (!verification.verified) {
+      console.error('[RENEW_API] Payment verification failed', { reference, username });
       return NextResponse.json({ 
-        error: 'Payment verification failed' 
+        error: 'Payment verification failed. Please contact support with your payment reference.',
+        reference: reference,
+        timestamp: new Date().toISOString()
       }, { status: 400 });
     }
+
+    console.log('[RENEW_API] Payment verified successfully', {
+      reference,
+      amountNaira: verification.amountNaira
+    });
 
     // Idempotency guard: ensure same reference cannot process twice
     const existingTransaction = await getExistingRenewalTransaction(reference);
@@ -232,42 +418,80 @@ export async function POST(request: NextRequest) {
 
     // Get or create customer for database record
     const customerInfo = await getOrCreateCustomer(username);
+    console.log('[RENEW_API] Customer info retrieved:', { 
+      username, 
+      customerId: customerInfo.id, 
+      accountOwnerId: customerInfo.account_owner_id,
+      hasValidIds: customerInfo.id !== null
+    });
 
-    const { error: createError } = await supabaseAdmin
-      .from('renewal_transactions')
-      .insert({
-        username,
-        customer_id: customerInfo.id,
-        account_owner_id: customerInfo.account_owner_id,
-        service_plan_id: servicePlanId,
-        amount_paid: verification.amountNaira,
-        commission_rate: 0,
-        commission_amount: 0,
-        paystack_reference: reference,
-        payment_status: 'processing',
-        renewal_period_days: renewalPeriod,
-        renewal_start_date: new Date().toISOString(),
-      });
+    // Check if Supabase is configured for database operations
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const isSupabaseConfigured = supabaseUrl && !supabaseUrl.includes('your-project') && !supabaseUrl.includes('dummy');
 
-    if (createError) {
-      if (createError.code === '23505') {
-        const duplicateTransaction = await getExistingRenewalTransaction(reference);
+    if (!isSupabaseConfigured) {
+      console.warn('[RENEW_API] Supabase not configured - skipping database transaction creation');
+      console.log('[RENEW_API] Proceeding with RADIUS credit addition only...');
+    } else {
+      // Only try database operations if Supabase is configured
+      if (!customerInfo.id || customerInfo.id.startsWith('temp_')) {
+        console.error('[RENEW_API] CRITICAL: Could not get/create customer record', { username });
         return NextResponse.json({
-          success: true,
-          message: 'Payment already processed for this reference.',
-          reference,
-          username,
-          newExpiry: duplicateTransaction?.renewal_end_date || null,
-          processing_method: 'idempotent',
-          idempotent: true,
-        }, { status: 200 });
+          success: false,
+          error: 'Customer record could not be created. Please contact support.',
+        }, { status: 500 });
       }
 
-      console.error('Error creating preliminary renewal transaction:', createError);
-      return NextResponse.json({
-        success: false,
-        error: 'Could not initialize renewal transaction. Please try again.',
-      }, { status: 500 });
+      const { error: createError } = await supabaseAdmin
+        .from('renewal_transactions')
+        .insert({
+          username,
+          customer_id: customerInfo.id,
+          account_owner_id: customerInfo.account_owner_id,
+          service_plan_id: servicePlanId,
+          amount_paid: verification.amountNaira,
+          commission_rate: 0,
+          commission_amount: 0,
+          paystack_reference: reference,
+          payment_status: 'processing',
+          renewal_period_days: renewalPeriod,
+          renewal_start_date: new Date().toISOString(),
+        });
+
+      if (createError) {
+        if (createError.code === '23505') {
+          const duplicateTransaction = await getExistingRenewalTransaction(reference);
+          return NextResponse.json({
+            success: true,
+            message: 'Payment already processed for this reference.',
+            reference,
+            username,
+            newExpiry: duplicateTransaction?.renewal_end_date || null,
+            processing_method: 'idempotent',
+            idempotent: true,
+          }, { status: 200 });
+        }
+
+        console.error('[RENEW_API] Error creating preliminary renewal transaction:', {
+          error: createError,
+          code: createError.code,
+          message: createError.message,
+          details: createError.details,
+          hint: createError.hint,
+          username,
+          reference,
+          customerId: customerInfo.id,
+          accountOwnerId: customerInfo.account_owner_id
+        });
+        return NextResponse.json({
+          success: false,
+          error: 'Could not initialize renewal transaction. Please try again.',
+          debug: process.env.NODE_ENV === 'development' ? {
+            dbError: createError.message,
+            code: createError.code
+          } : undefined
+        }, { status: 500 });
+      }
     }
 
     console.log('✅ Payment verified - processing renewal immediately...');
