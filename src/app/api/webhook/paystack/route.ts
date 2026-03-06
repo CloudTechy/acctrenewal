@@ -44,6 +44,7 @@ interface PaystackWebhookEvent {
       username?: string;
       srvid?: string;
       timeunitexp?: number;
+      timebaseexp?: string;
       trafficunitcomb?: number;
       limitcomb?: number;
       [key: string]: string | number | boolean | null | undefined | Array<{
@@ -78,6 +79,33 @@ interface PaystackWebhookEvent {
   };
 }
 
+type RenewalUnit = 'day' | 'month';
+
+function normalizeRenewalUnit(value?: string | number): RenewalUnit {
+  const str = String(value || '1').toLowerCase().trim();
+  
+  // Handle RADIUS numeric codes: 1="day", 3="month"
+  if (str === '1' || str === 'day' || str === 'days') return 'day';
+  if (str === '3' || str === 'month' || str === 'months') return 'month';
+  if (str === '2' || str === 'week' || str === 'weeks') return 'day'; // Map weeks to days
+  
+  // Handle partial matches for text
+  if (str.startsWith('month')) return 'month';
+  if (str.startsWith('week')) return 'day';
+  
+  return 'day'; // Default to day
+}
+
+function addDuration(baseDate: Date, amount: number, unit: RenewalUnit): Date {
+  const result = new Date(baseDate);
+  if (unit === 'month') {
+    result.setMonth(result.getMonth() + amount);
+  } else {
+    result.setDate(result.getDate() + amount);
+  }
+  return result;
+}
+
 // Verify Paystack webhook signature
 function verifyPaystackSignature(payload: string, signature: string): boolean {
   const secret = process.env.PAYSTACK_SECRET_KEY;
@@ -93,25 +121,27 @@ function verifyPaystackSignature(payload: string, signature: string): boolean {
 // Add credits to user via RADIUS Manager
 async function addCreditsToUser(
   username: string,
-  daysToAdd: number,
+  unitsToAdd: number,
+  renewalUnit: RenewalUnit = 'day',
   trafficToAdd: number = 0,
   currentExpiry?: string
 ): Promise<{ success: boolean; newExpiry?: string }> {
   try {
     // Validate and sanitize all inputs
     const safeUsername = sanitizeUsername(username);
-    const safeDays = validateDays(daysToAdd);
+    const safeUnits = validateDays(unitsToAdd);
     const safeTraffic = validateTraffic(trafficToAdd);
     
-    console.log(`Adding ${safeDays} days to user ${safeUsername}`);
+    console.log(`Adding ${safeUnits} ${renewalUnit} to user ${safeUsername}`);
     if (currentExpiry) {
       console.log(`User current expiry: ${currentExpiry}`);
     }
 
-    // Calculate the correct number of days to add based on current expiry
-    let actualDaysToAdd = safeDays;
+    // Calculate the correct number of units to add based on current expiry.
+    // Expired-day compensation is only safe for day-based plans.
+    let actualUnitsToAdd = safeUnits;
     
-    if (currentExpiry) {
+    if (currentExpiry && renewalUnit === 'day') {
       const expiryDate = new Date(currentExpiry);
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Set to start of day for accurate comparison
@@ -119,22 +149,22 @@ async function addCreditsToUser(
       // If account has expired, add the expired days to ensure full service period
       if (expiryDate < today) {
         const expiredDays = Math.ceil((today.getTime() - expiryDate.getTime()) / (1000 * 60 * 60 * 24));
-        actualDaysToAdd = safeDays + expiredDays;
-        console.log(`Account expired ${expiredDays} days ago. Adding ${actualDaysToAdd} days total (${safeDays} service + ${expiredDays} expired)`);
+        actualUnitsToAdd = safeUnits + expiredDays;
+        console.log(`Account expired ${expiredDays} days ago. Adding ${actualUnitsToAdd} days total (${safeUnits} service + ${expiredDays} expired)`);
       } else {
-        console.log(`Account expires in the future. Adding ${safeDays} days as planned`);
+        console.log(`Account expires in the future. Adding ${safeUnits} days as planned`);
       }
     } else {
-      console.log(`No current expiry provided. Adding ${safeDays} days from today`);
+      console.log(`No current expiry provided. Adding ${safeUnits} ${renewalUnit} from today`);
     }
 
     // Build URL with validated parameters matching Postman documentation
-    // According to Postman: q=add_credits&username=user&expiry=1&unit=day
-    const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${encodeURIComponent(RADIUS_API_CONFIG.apiuser)}&apipass=${encodeURIComponent(RADIUS_API_CONFIG.apipass)}&q=add_credits&username=${encodeURIComponent(safeUsername)}&expiry=${actualDaysToAdd}&unit=day`;
+    // According to Postman: q=add_credits&username=user&expiry=1&unit=day|month
+    const url = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${encodeURIComponent(RADIUS_API_CONFIG.apiuser)}&apipass=${encodeURIComponent(RADIUS_API_CONFIG.apipass)}&q=add_credits&username=${encodeURIComponent(safeUsername)}&expiry=${actualUnitsToAdd}&unit=${renewalUnit}`;
 
     console.log('Adding credits to user via webhook:', safeUsername);
-    console.log('- Service plan days:', safeDays);
-    console.log('- Actual days to add:', actualDaysToAdd);
+    console.log('- Service plan units:', safeUnits, renewalUnit);
+    console.log('- Actual units to add:', actualUnitsToAdd, renewalUnit);
     console.log('- Traffic to add (bytes):', safeTraffic);
 
     const response = await fetch(url, {
@@ -194,6 +224,7 @@ function extractPaymentMetadata(event: PaystackWebhookEvent) {
   let username = '';
   let srvid = '';
   let timeunitexp = 30; // default
+  let timebaseexp = 'day';
   let trafficunitcomb = 0;
   let limitcomb = 0;
 
@@ -210,6 +241,9 @@ function extractPaymentMetadata(event: PaystackWebhookEvent) {
         case 'timeunitexp':
           timeunitexp = parseInt(field.value) || 30;
           break;
+        case 'timebaseexp':
+          timebaseexp = field.value || 'day';
+          break;
         case 'trafficunitcomb':
           trafficunitcomb = parseInt(field.value) || 0;
           break;
@@ -224,6 +258,7 @@ function extractPaymentMetadata(event: PaystackWebhookEvent) {
   username = username || (typeof metadata.username === 'string' ? metadata.username : '');
   srvid = srvid || (typeof metadata.srvid === 'string' ? metadata.srvid : '');
   timeunitexp = timeunitexp || (typeof metadata.timeunitexp === 'number' ? metadata.timeunitexp : 30);
+  timebaseexp = timebaseexp || (typeof metadata.timebaseexp === 'string' ? metadata.timebaseexp : 'day');
   trafficunitcomb = trafficunitcomb || (typeof metadata.trafficunitcomb === 'number' ? metadata.trafficunitcomb : 0);
   limitcomb = limitcomb || (typeof metadata.limitcomb === 'number' ? metadata.limitcomb : 0);
 
@@ -231,6 +266,7 @@ function extractPaymentMetadata(event: PaystackWebhookEvent) {
     username,
     srvid,
     timeunitexp,
+    timebaseexp,
     trafficunitcomb,
     limitcomb
   };
@@ -329,10 +365,12 @@ export async function POST(request: NextRequest) {
       
       // Validate all metadata fields
       let username: string, srvid: number, timeunitexp: number, trafficunitcomb: number, limitcomb: number;
+      let renewalUnit: RenewalUnit;
       try {
         username = sanitizeUsername(rawMetadata.username);
         srvid = validateServicePlanId(rawMetadata.srvid);
         timeunitexp = validateDays(rawMetadata.timeunitexp);
+        renewalUnit = normalizeRenewalUnit(rawMetadata.timebaseexp);
         trafficunitcomb = validateTraffic(rawMetadata.trafficunitcomb);
         limitcomb = validateTraffic(rawMetadata.limitcomb); // Also validate limitcomb
       } catch (error) {
@@ -361,8 +399,9 @@ export async function POST(request: NextRequest) {
             // Parse RADIUS response to get current expiry
             if (typeof userData === 'object' && userData !== null) {
               const resultCode = userData["0"];
-              if (resultCode === 0 && userData.expiry) {
-                currentExpiry = userData.expiry;
+              const responseExpiry = userData.expiry || userData["1"]?.expiry;
+              if (resultCode === 0 && responseExpiry) {
+                currentExpiry = responseExpiry;
                 console.log('Current user expiry from RADIUS:', currentExpiry);
               }
             }
@@ -388,7 +427,7 @@ export async function POST(request: NextRequest) {
             payment_status: 'processing' as const, // Mark as processing initially
             renewal_period_days: timeunitexp,
             renewal_start_date: new Date().toISOString(),
-            renewal_end_date: new Date(Date.now() + timeunitexp * 24 * 60 * 60 * 1000).toISOString(),
+            renewal_end_date: addDuration(new Date(), timeunitexp, renewalUnit).toISOString(),
             customer_location: '',
           };
 
@@ -405,7 +444,7 @@ export async function POST(request: NextRequest) {
 
         // Add credits to user account
         const trafficToAdd = limitcomb === 0 ? 0 : trafficunitcomb * 1048576; // Convert MB to bytes
-        const creditsResult = await addCreditsToUser(username, timeunitexp, trafficToAdd, currentExpiry);
+        const creditsResult = await addCreditsToUser(username, timeunitexp, renewalUnit, trafficToAdd, currentExpiry);
 
         if (!creditsResult.success) {
           console.error('Failed to add credits for:', username);
@@ -466,7 +505,8 @@ async function checkExistingTransaction(reference: string): Promise<boolean> {
 // Record transaction in database
 async function recordTransaction(event: PaystackWebhookEvent, newExpiry?: string) {
   try {
-    const { username, srvid, timeunitexp } = extractPaymentMetadata(event);
+    const { username, srvid, timeunitexp, timebaseexp } = extractPaymentMetadata(event);
+    const renewalUnit = normalizeRenewalUnit(timebaseexp);
     const paymentAmount = event.data.amount / 100; // Convert from kobo to naira
 
     // Get service plan details to get the actual service plan name
@@ -658,7 +698,7 @@ async function recordTransaction(event: PaystackWebhookEvent, newExpiry?: string
       commission_rate: accountOwner ? accountOwner.commission_rate : 0,
       commission_amount: commissionAmount,
       payment_status: 'success' as const, // Update from 'processing' to 'success'
-      renewal_end_date: newExpiry || new Date(Date.now() + timeunitexp * 24 * 60 * 60 * 1000).toISOString(),
+      renewal_end_date: newExpiry || addDuration(new Date(), timeunitexp, renewalUnit).toISOString(),
     };
 
     // Update the existing transaction

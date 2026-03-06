@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -49,6 +49,7 @@ interface ServicePlan {
   unitpriceaddtax?: number;
   totalPrice?: number; // Calculated total price
   timeunitexp?: number;
+  timebaseexp?: string;
   trafficunitdl?: number;
   trafficunitul?: number;
   trafficunitcomb?: number;
@@ -67,6 +68,12 @@ interface PaystackConfig {
   amount: number;
   publicKey: string;
   metadata?: {
+    username?: string;
+    srvid?: string;
+    timeunitexp?: number;
+    timebaseexp?: string;
+    trafficunitcomb?: number;
+    limitcomb?: number;
     custom_fields: Array<{
       display_name: string;
       variable_name: string;
@@ -215,6 +222,7 @@ const getServicePlan = async (srvid: number): Promise<ServicePlan> => {
                      (parseFloat(serviceData.unitpricetax) || 0) + 
                      (parseFloat(serviceData.unitpriceaddtax) || 0),
           timeunitexp: parseInt(serviceData.timeunitexp) || 0,
+          timebaseexp: (serviceData.timebaseexp || 'day').toString().toLowerCase(),
           trafficunitdl: parseInt(serviceData.trafficunitdl) || 0,
           trafficunitul: parseInt(serviceData.trafficunitul) || 0,
           trafficunitcomb: parseInt(serviceData.trafficunitcomb) || 0,
@@ -258,6 +266,28 @@ const formatUsageData = (bytes: number): { used: string; remaining: string; isNe
     // Positive value = data remaining
     return { used: '0 Bytes', remaining: formatted, isNegative: false };
   }
+};
+
+const normalizePlanTimeBase = (value?: string | number): 'day' | 'month' => {
+  const str = String(value || '1').toLowerCase().trim();
+  
+  // Handle RADIUS numeric codes: 1="day", 3="month"
+  if (str === '1' || str === 'day' || str === 'days') return 'day';
+  if (str === '3' || str === 'month' || str === 'months') return 'month';
+  if (str === '2' || str === 'week' || str === 'weeks') return 'day'; // Map weeks to days
+  
+  // Handle partial matches for text
+  if (str.startsWith('month')) return 'month';
+  if (str.startsWith('week')) return 'day';
+  
+  return 'day';
+};
+
+const formatPlanValidity = (timeunitexp?: number, timebaseexp?: string): string => {
+  const duration = Math.max(0, Number(timeunitexp || 0));
+  const base = normalizePlanTimeBase(timebaseexp);
+  const unitLabel = duration === 1 ? base : `${base}s`;
+  return `${duration} ${unitLabel}`;
 };
 
 const formatCurrency = (amount: number): string => {
@@ -454,6 +484,7 @@ const UserDetails: React.FC<UserDetailsProps> = ({
   const downloadUsed = formatUsageData(userData.dlbytes || 0).isNegative ? formatUsageData(userData.dlbytes || 0).used : '0 Bytes';
   const uploadUsed = formatUsageData(userData.ulbytes || 0).isNegative ? formatUsageData(userData.ulbytes || 0).used : '0 Bytes';
   const totalUsed = formatBytes(Math.abs(userData.dlbytes || 0) + Math.abs(userData.ulbytes || 0));
+  const planValidity = formatPlanValidity(servicePlan.timeunitexp, servicePlan.timebaseexp);
 
   const accountStatusItems = [
     { label: 'status', value: accountStatus.status, valueClass: statusValueClass },
@@ -465,7 +496,7 @@ const UserDetails: React.FC<UserDetailsProps> = ({
   const currentPlanItems = [
     { label: 'Plan Name', value: servicePlan.srvname || 'Unknown Plan', valueClass: 'text-[#19b76f] bg-[#12423a] border border-[#28504f] px-3 py-1 rounded-lg' },
     { label: 'Monthly Price', value: formatCurrency(servicePlan.totalPrice || 0), valueClass: 'text-white/90' },
-    { label: 'Validity', value: `${servicePlan.timeunitexp || 0} days`, valueClass: 'text-[#19b76f]' },
+    { label: 'Validity', value: planValidity, valueClass: 'text-[#19b76f]' },
   ];
 
   const personalDetailsItems = [
@@ -502,19 +533,28 @@ const UserDetails: React.FC<UserDetailsProps> = ({
                 <DataRow key={idx} label={item.label} value={item.value} valueClass={item.valueClass} />
               ))}
             </div>
-            <PaymentButton
-              paystackConfig={paystackConfig}
-              onPaymentSuccess={onPaymentSuccess}
-              onPaymentClose={onPaymentClose}
-              isProcessingPayment={isProcessingPayment}
-              servicePlan={servicePlan}
-            />
-            <div className="mt-4 text-center">
-              <p className="text-[10px] text-white/40 mb-1">Secure payment powered by paystack</p>
-                <p className="text-[10px] text-white/60">
-                Renew <span className="font-bold text-[#ffd534] md:whitespace-nowrap">{servicePlan.srvname || 'your plan'}</span> for {servicePlan.timeunitexp || 30} days
-              </p>
-            </div>
+            {accountStatus.status === 'ACTIVE' ? (
+              <div className="bg-[#134620]/40 border border-[#19b76f]/30 rounded-xl p-4 text-center">
+                <p className="text-[#19b76f] font-semibold mb-2">✓ Plan Active</p>
+                <p className="text-xs text-white/60">Your subscription is active and valid until {formatDate(userData.expiry || '')}</p>
+              </div>
+            ) : (
+              <>
+                <PaymentButton
+                  paystackConfig={paystackConfig}
+                  onPaymentSuccess={onPaymentSuccess}
+                  onPaymentClose={onPaymentClose}
+                  isProcessingPayment={isProcessingPayment}
+                  servicePlan={servicePlan}
+                />
+                <div className="mt-4 text-center">
+                  <p className="text-[10px] text-white/40 mb-1">Secure payment powered by paystack</p>
+                  <p className="text-[10px] text-white/60">
+                    Renew <span className="font-bold text-[#ffd534] md:whitespace-nowrap">{servicePlan.srvname || 'your plan'}</span> for {planValidity}
+                  </p>
+                </div>
+              </>
+            )}
           </AccountCard>
 
           {/* <div className="md:col-span-2"> */}
@@ -672,6 +712,7 @@ const ISPLandingPage: React.FC = () => {
         username: originalUsername,
         srvid: servicePlan.srvid?.toString() || '',
         timeunitexp: servicePlan.timeunitexp || 30,
+        timebaseexp: servicePlan.timebaseexp || 'day',
         trafficunitcomb: servicePlan.trafficunitcomb || 0,
         limitcomb: servicePlan.limitcomb || 0,
         // Custom fields for display/reference
@@ -695,6 +736,11 @@ const ISPLandingPage: React.FC = () => {
             display_name: 'Validity Period',
             variable_name: 'timeunitexp',
             value: (servicePlan.timeunitexp || 30).toString()
+          },
+          {
+            display_name: 'Validity Base',
+            variable_name: 'timebaseexp',
+            value: (servicePlan.timebaseexp || 'day').toString()
           },
           {
             display_name: 'Traffic Allowance',
@@ -757,6 +803,7 @@ const ISPLandingPage: React.FC = () => {
           username: originalUsername,
           srvid: servicePlan?.srvid,
           timeunitexp: servicePlan?.timeunitexp || 30,
+          timebaseexp: servicePlan?.timebaseexp || 'day',
           trafficunitcomb: servicePlan?.trafficunitcomb || 0,
           limitcomb: servicePlan?.limitcomb || 0,
           currentExpiry: userData?.expiry
@@ -766,55 +813,48 @@ const ISPLandingPage: React.FC = () => {
       const renewalResult = await renewalResponse.json();
 
       if (renewalResult.success) {
-        // Instead of showing success message, refresh the account data
-        // so user can see updated expiry date and account status immediately
-        console.log('Renewal successful, refreshing account data...');
+        console.log('Renewal response:', renewalResult);
         
-        try {
-          // Fetch fresh user data to show updated information
-          const refreshedUserResult = await getUserData(originalUsername);
+        // If we have newExpiry from API, use it immediately
+        if (renewalResult.newExpiry && userData) {
+          console.log('Updating account with new expiry from API:', renewalResult.newExpiry);
+          setUserData({
+            ...userData,
+            expiry: renewalResult.newExpiry
+          });
           
-          if (refreshedUserResult.code === 0 && refreshedUserResult.srvid) {
-            // Update user data with fresh information from server
-            setUserData(refreshedUserResult);
-            
-            // Also refresh service plan data if needed
-            const refreshedServiceResult = await getServicePlan(refreshedUserResult.srvid);
-            if (refreshedServiceResult.code === 0) {
-              setServicePlan(refreshedServiceResult);
-            }
-            
-            console.log('Account data refreshed successfully');
-            
-            // Show brief success indicator
-            setShowAccountUpdated(true);
-            setTimeout(() => setShowAccountUpdated(false), 3000);
-            
-          } else {
-            console.error('Failed to refresh user data:', refreshedUserResult.str);
-            // Fall back to using the renewal result data
-            if (userData) {
-              setUserData({
-                ...userData,
-                expiry: renewalResult.newExpiry
-              });
-            }
-          }
+          // Show success indicator
+          setShowAccountUpdated(true);
+          setTimeout(() => setShowAccountUpdated(false), 3000);
+        } else {
+          // Fallback: try to refresh from API
+          console.log('No newExpiry in response, fetching fresh account data...');
           
-        } catch (refreshError) {
-          console.error('Error refreshing account data:', refreshError);
-          // Fall back to using the renewal result data
-          if (userData) {
-            setUserData({
-              ...userData,
-              expiry: renewalResult.newExpiry
-            });
+          try {
+            const refreshedUserResult = await getUserData(originalUsername);
+            
+            if (refreshedUserResult.code === 0 && refreshedUserResult.srvid) {
+              setUserData(refreshedUserResult);
+              
+              // Also refresh service plan data if needed
+              const refreshedServiceResult = await getServicePlan(refreshedUserResult.srvid);
+              if (refreshedServiceResult.code === 0) {
+                setServicePlan(refreshedServiceResult);
+              }
+              
+              console.log('Account data refreshed successfully');
+              setShowAccountUpdated(true);
+              setTimeout(() => setShowAccountUpdated(false), 3000);
+              
+            } else {
+              console.error('Failed to refresh user data:', refreshedUserResult.str || 'Unknown error');
+              setError('Payment processed, but could not refresh account details. Please refresh the page.');
+            }
+          } catch (refreshError) {
+            console.error('Error refreshing account data:', refreshError);
+            setError('Payment processed, but could not refresh account details. Please refresh the page.');
           }
         }
-        
-        // Show brief success indicator for all success cases
-        setShowAccountUpdated(true);
-        setTimeout(() => setShowAccountUpdated(false), 3000);
         
       } else {
         setError(renewalResult.error || 'Failed to process renewal');
@@ -963,8 +1003,8 @@ const ISPLandingPage: React.FC = () => {
                   transition={{ delay: 1 }}
                   className="mt-4 flex items-center justify-center gap-4 text-xs text-white/40"
                 >
-                  <span className="flex items-center gap-1">âœ“ Instant Activation</span>
-                  <span className="flex items-center gap-1">âœ“ 24/7 Support</span>
+                  <span className="flex items-center gap-1">✓ Instant Activation</span>
+                  <span className="flex items-center gap-1">✓ 24/7 Support</span>
                 </motion.div>
 
                 {error && (
