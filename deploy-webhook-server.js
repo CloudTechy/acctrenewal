@@ -147,6 +147,15 @@ const handleDeployment = async (data) => {
       'docker',
       ['compose', '-f', composeFile, 'up', '-d', '--no-build', 'acctrenewal-app'],
       APP_DIR
+
+        // Step 7.5: Verify image was pulled (for debugging cache issues)
+        log(`🔍 Verifying fresh image deployment...`);
+        const imageInfo = await executeCommand(
+          'docker',
+          ['inspect', '-f', '{{.Created}}', image],
+          APP_DIR
+        ).catch(() => 'Image info unavailable');
+        log(`Image created at: ${imageInfo.trim()}`);
     );
 
     // Step 8: Wait for service startup
