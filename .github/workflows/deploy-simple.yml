@@ -121,7 +121,7 @@ jobs:
           no-cache: true
           build-args: |
             NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=${{ secrets.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY }}
-            
+            PAYSTACK_SECRET_KEY=${{ secrets.PAYSTACK_SECRET_KEY }}
 
       - name: Trigger VPS webhook deployment
         if: |

@@ -110,7 +110,9 @@ const verifyPaystackTransaction = async (reference: string): Promise<PaystackVer
       reference, 
       timestamp: new Date().toISOString(),
       url: verificationUrl,
-      secretKeyPrefix: process.env.PAYSTACK_SECRET_KEY?.substring(0, 10) || 'NOT_SET'
+      secretKeyLength: process.env.PAYSTACK_SECRET_KEY?.length || 0,
+      secretKeyPrefix: process.env.PAYSTACK_SECRET_KEY?.substring(0, 10) || 'NOT_SET',
+      secretKeyValid: process.env.PAYSTACK_SECRET_KEY ? 'SET' : 'NOT_SET'
     });
 
     if (!process.env.PAYSTACK_SECRET_KEY) {
@@ -118,14 +120,35 @@ const verifyPaystackTransaction = async (reference: string): Promise<PaystackVer
       return { verified: false, amountNaira: 0 };
     }
 
+    const authHeader = `Bearer ${process.env.PAYSTACK_SECRET_KEY}`;
+    console.log('[PAYMENT_VERIFY] Making HTTP request', {
+      url: verificationUrl,
+      method: 'GET',
+      authHeaderLength: authHeader.length,
+      authHeaderPrefix: authHeader.substring(0, 20) + '...'
+    });
+
     const response = await fetch(verificationUrl, {
+      method: 'GET',
       headers: {
-        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        Authorization: authHeader,
         'Content-Type': 'application/json',
       },
     });
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      const responseText = await response.text();
+      console.error('[PAYMENT_VERIFY] Failed to parse response JSON', {
+        status: response.status,
+        statusText: response.statusText,
+        responseText: responseText.substring(0, 500), // First 500 chars
+        parseError: parseError instanceof Error ? parseError.message : String(parseError)
+      });
+      return { verified: false, amountNaira: 0 };
+    }
     
     console.log('[PAYMENT_VERIFY] Paystack API response', {
       httpStatus: response.status,
@@ -137,15 +160,18 @@ const verifyPaystackTransaction = async (reference: string): Promise<PaystackVer
       currency: data.data?.currency,
       message: data.message,
       reference: reference,
-      responseOk: response.ok
+      responseOk: response.ok,
+      fullData: JSON.stringify(data).substring(0, 200)
     });
 
     if (!response.ok) {
-      console.error('[PAYMENT_VERIFY] API error', {
+      console.error('[PAYMENT_VERIFY] API error response received', {
         status: response.status,
         statusText: response.statusText,
         message: data.message,
         reference: reference,
+        paystackStatus: data.status,
+        errors: data.errors,
         fullResponse: JSON.stringify(data)
       });
       return { verified: false, amountNaira: 0 };
