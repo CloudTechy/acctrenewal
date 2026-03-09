@@ -7,10 +7,15 @@ const validateEnvironment = () => {
   const warnings: string[] = [];
   
   // Critical: Paystack (required for payment verification)
-  if (!process.env.PAYSTACK_SECRET_KEY) {
+  const paystackKey = process.env.PAYSTACK_SECRET_KEY || '';
+  
+  if (!paystackKey) {
     errors.push('PAYSTACK_SECRET_KEY not configured');
-  } else if (!process.env.PAYSTACK_SECRET_KEY.startsWith('sk_')) {
-    errors.push('PAYSTACK_SECRET_KEY has invalid format (must start with sk_)');
+  } else if (paystackKey.length < 20) {
+    // Paystack keys are typically 50+ chars (JWT format or sk_* format)
+    errors.push('PAYSTACK_SECRET_KEY appears to be invalid (too short)');
+  } else if (paystackKey.includes('your_') || paystackKey.includes('placeholder')) {
+    errors.push('PAYSTACK_SECRET_KEY still contains placeholder value');
   }
   
   // Optional: Supabase (only needed for analytics/tracking)
@@ -23,8 +28,9 @@ const validateEnvironment = () => {
   }
   
   console.log('[ENV_CHECK] Configuration status:', {
+    paystackKeyLength: paystackKey.length,
     paystackConfigured: errors.length === 0,
-    paystackKeyPrefix: process.env.PAYSTACK_SECRET_KEY?.substring(0, 10),
+    paystackKeyPrefix: paystackKey ? paystackKey.substring(0, 10) : 'not-set',
     supabaseConfigured: isSupabaseConfigured,
     supabaseUrl: isSupabaseConfigured ? supabaseUrl : 'not-configured'
   });
