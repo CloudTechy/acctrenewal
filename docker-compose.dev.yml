@@ -22,7 +22,7 @@ services:
       
       # Paystack Configuration (use test keys for development)
       - PAYSTACK_SECRET_KEY=${PAYSTACK_SECRET_KEY}
-      - PAYSTACK_PUBLIC_KEY=${PAYSTACK_PUBLIC_KEY}
+      - NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=${NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY}
       - PAYSTACK_WEBHOOK_SECRET=${PAYSTACK_WEBHOOK_SECRET}
       
       # RADIUS Manager API Configuration
