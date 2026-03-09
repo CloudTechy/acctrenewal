@@ -76,10 +76,20 @@ jobs:
         if: github.event_name != 'pull_request'
         env:
           NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY }}
+          PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_SECRET_KEY }}
           DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
         run: |
+          echo "DEBUG: Environment is $DEPLOY_ENV"
+          echo "DEBUG: Public key length: ${#NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY}"
+          echo "DEBUG: Secret key length: ${#PAYSTACK_SECRET_KEY}"
+          
           if [ -z "$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY" ]; then
             echo "ERROR: NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY secret is missing"
+            exit 1
+          fi
+          
+          if [ -z "$PAYSTACK_SECRET_KEY" ]; then
+            echo "ERROR: PAYSTACK_SECRET_KEY secret is missing"
             exit 1
           fi
 
@@ -122,6 +132,14 @@ jobs:
           build-args: |
             NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=${{ secrets.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY }}
             PAYSTACK_SECRET_KEY=${{ secrets.PAYSTACK_SECRET_KEY }}
+      
+      - name: Debug build args
+        run: |
+          echo "Public key passed (length): ${#NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY}"
+          echo "Secret key passed (length): ${#PAYSTACK_SECRET_KEY}"
+        env:
+          NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY }}
+          PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_SECRET_KEY }}
 
       - name: Trigger VPS webhook deployment
         if: |
