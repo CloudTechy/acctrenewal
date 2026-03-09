@@ -534,28 +534,28 @@ const UserDetails: React.FC<UserDetailsProps> = ({
                 <DataRow key={idx} label={item.label} value={item.value} valueClass={item.valueClass} />
               ))}
             </div>
-            {accountStatus.status === 'ACTIVE' ? (
-              <div className="bg-[#134620]/40 border border-[#19b76f]/30 rounded-xl p-4 text-center">
+            {accountStatus.status === 'ACTIVE' && (
+              <div className="bg-[#134620]/40 border border-[#19b76f]/30 rounded-xl p-4 text-center mb-4">
                 <p className="text-[#19b76f] font-semibold mb-2">✓ Plan Active</p>
                 <p className="text-xs text-white/60">Your subscription is active and valid until {formatDate(userData.expiry || '')}</p>
               </div>
-            ) : (
-              <>
-                <PaymentButton
-                  paystackConfig={paystackConfig}
-                  onPaymentSuccess={onPaymentSuccess}
-                  onPaymentClose={onPaymentClose}
-                  isProcessingPayment={isProcessingPayment}
-                  servicePlan={servicePlan}
-                />
-                <div className="mt-4 text-center">
-                  <p className="text-[10px] text-white/40 mb-1">Secure payment powered by paystack</p>
-                  <p className="text-[10px] text-white/60">
-                    Renew <span className="font-bold text-[#ffd534] md:whitespace-nowrap">{servicePlan.srvname || 'your plan'}</span> for {planValidity}
-                  </p>
-                </div>
-              </>
             )}
+            <PaymentButton
+              paystackConfig={paystackConfig}
+              onPaymentSuccess={onPaymentSuccess}
+              onPaymentClose={onPaymentClose}
+              isProcessingPayment={isProcessingPayment}
+              servicePlan={servicePlan}
+            />
+            <div className="mt-4 text-center">
+              <p className="text-[10px] text-white/40 mb-1">Secure payment powered by paystack</p>
+              <p className="text-[10px] text-white/60">
+                {accountStatus.status === 'ACTIVE' 
+                  ? `Extend your plan for ${planValidity} from current expiry` 
+                  : `Renew ${servicePlan.srvname || 'your plan'} for ${planValidity}`
+                }
+              </p>
+            </div>
           </AccountCard>
 
           {/* <div className="md:col-span-2"> */}
