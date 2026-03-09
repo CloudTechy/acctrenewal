@@ -12,17 +12,17 @@ build: ## Build Docker image (with cache)
 build-no-cache: ## Build Docker image (no cache, fresh build)
 	docker compose build --no-cache --pull
 
-up: ## Start services
-	docker compose up -d
+up: ## Start app + webhook (VPS profile)
+	docker compose --profile vps up -d acctrenewal-app acctrenewal-webhook
 
 down: ## Stop services
 	docker compose down
 
 restart: ## Restart services
-	docker compose restart
+	docker compose --profile vps restart acctrenewal-app acctrenewal-webhook
 
 logs: ## View logs (follow)
-	docker compose logs -f acctrenewal-app
+	docker compose logs -f acctrenewal-app acctrenewal-webhook
 
 clean: ## Remove containers, images, and volumes
 	docker compose down -v
@@ -32,15 +32,15 @@ deploy-local: ## Full fresh deployment (no cache)
 	@echo "🚀 Starting fresh deployment..."
 	docker compose down
 	docker compose build --no-cache --pull
-	docker compose up -d
+	docker compose --profile vps up -d acctrenewal-app acctrenewal-webhook
 	@echo "✅ Deployment complete!"
 	@echo "📋 Checking container status..."
 	docker compose ps
 	@echo ""
 	@echo "📊 View logs with: make logs"
 
-up-vps: ## Start app + webhook (VPS profile)
-	docker compose --profile vps up -d acctrenewal-app acctrenewal-webhook
+up-vps: ## Alias for up (VPS profile)
+	$(MAKE) up
 
 deploy-vps: ## Full fresh VPS deploy with webhook
 	@echo "🚀 Starting fresh VPS deployment (app + webhook)..."

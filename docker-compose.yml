@@ -5,7 +5,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      pull_policy: always
       args:
         NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: ${NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY}
         PAYSTACK_SECRET_KEY: ${PAYSTACK_SECRET_KEY}
