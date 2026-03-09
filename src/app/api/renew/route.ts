@@ -560,23 +560,77 @@ export async function POST(request: NextRequest) {
         console.error('Error fetching user data for expiry:', userError);
       }
 
-      // Calculate actual units to add
-      // Only add elapsed expired days when the plan is day-based.
-      let actualUnitsToAdd = renewalPeriod;
-      if (renewalUnit === 'day' && userCurrentExpiry) {
-        const expiryDate = new Date(userCurrentExpiry);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        if (expiryDate < today) {
-          const expiredDays = Math.ceil((today.getTime() - expiryDate.getTime()) / (1000 * 60 * 60 * 24));
-          actualUnitsToAdd = renewalPeriod + expiredDays;
-          console.log(`Account expired ${expiredDays} days ago. Adding ${actualUnitsToAdd} days total`);
+      // Compute fair renewal target so users are never shortchanged:
+      // target expiry = max(current expiry, payment day) + plan duration
+      // add_credits appears to apply from current expiry, so we convert target delta to day units.
+      const parseRadiusExpiryDate = (value?: string): Date | null => {
+        const trimmed = String(value || '').trim();
+        if (!trimmed || trimmed === '0000-00-00' || trimmed === '0000-00-00 00:00:00') {
+          return null;
         }
+
+        const [datePart] = trimmed.split(' ');
+        const [yearStr, monthStr, dayStr] = datePart.split('-');
+        const year = Number(yearStr);
+        const month = Number(monthStr);
+        const day = Number(dayStr);
+
+        if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+          return null;
+        }
+
+        return new Date(year, month - 1, day, 0, 0, 0, 0);
+      };
+
+      const DAY_MS = 1000 * 60 * 60 * 24;
+      let addCreditsValue = renewalPeriod;
+      let addCreditsUnit: RenewalUnit = renewalUnit;
+
+      const currentExpiryDate = parseRadiusExpiryDate(userCurrentExpiry);
+      if (currentExpiryDate) {
+        const paymentDate = new Date();
+        paymentDate.setHours(0, 0, 0, 0);
+
+        const renewalAnchorDate = currentExpiryDate > paymentDate ? currentExpiryDate : paymentDate;
+        const targetExpiryDate = new Date(renewalAnchorDate);
+
+        if (renewalUnit === 'month') {
+          targetExpiryDate.setMonth(targetExpiryDate.getMonth() + renewalPeriod);
+        } else {
+          targetExpiryDate.setDate(targetExpiryDate.getDate() + renewalPeriod);
+        }
+
+        const deltaDays = Math.max(
+          0,
+          Math.ceil((targetExpiryDate.getTime() - currentExpiryDate.getTime()) / DAY_MS)
+        );
+
+        if (deltaDays > 0) {
+          addCreditsValue = deltaDays;
+          addCreditsUnit = 'day';
+        }
+
+        console.log('[RENEW_API] Renewal target computed', {
+          username,
+          renewalUnit,
+          renewalPeriod,
+          currentExpiry: userCurrentExpiry,
+          renewalAnchor: renewalAnchorDate.toISOString(),
+          targetExpiry: targetExpiryDate.toISOString(),
+          addCreditsValue,
+          addCreditsUnit,
+        });
+      } else {
+        console.warn('[RENEW_API] Could not parse current expiry; falling back to direct add_credits values', {
+          username,
+          userCurrentExpiry,
+          renewalPeriod,
+          renewalUnit,
+        });
       }
 
       // Call RADIUS to add credits
-      const radiusUrl = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${encodeURIComponent(RADIUS_API_CONFIG.apiuser)}&apipass=${encodeURIComponent(RADIUS_API_CONFIG.apipass)}&q=add_credits&username=${encodeURIComponent(username)}&expiry=${actualUnitsToAdd}&unit=${renewalUnit}`;
+      const radiusUrl = `${RADIUS_API_CONFIG.baseUrl}?apiuser=${encodeURIComponent(RADIUS_API_CONFIG.apiuser)}&apipass=${encodeURIComponent(RADIUS_API_CONFIG.apipass)}&q=add_credits&username=${encodeURIComponent(username)}&expiry=${addCreditsValue}&unit=${addCreditsUnit}`;
       
       const radiusResponse = await fetch(radiusUrl, {
         method: 'GET',
