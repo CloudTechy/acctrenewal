@@ -1,4 +1,4 @@
-.PHONY: help build build-no-cache up down restart logs clean deploy-local
+.PHONY: help build build-no-cache up down restart logs clean deploy-local up-vps deploy-vps logs-vps
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -38,6 +38,20 @@ deploy-local: ## Full fresh deployment (no cache)
 	docker compose ps
 	@echo ""
 	@echo "📊 View logs with: make logs"
+
+up-vps: ## Start app + webhook (VPS profile)
+	docker compose --profile vps up -d acctrenewal-app acctrenewal-webhook
+
+deploy-vps: ## Full fresh VPS deploy with webhook
+	@echo "🚀 Starting fresh VPS deployment (app + webhook)..."
+	docker compose --profile vps down
+	docker compose --profile vps build --no-cache --pull acctrenewal-app
+	docker compose --profile vps up -d acctrenewal-app acctrenewal-webhook
+	@echo "✅ VPS deployment complete!"
+	docker compose ps
+
+logs-vps: ## View app + webhook logs
+	docker compose logs -f acctrenewal-app acctrenewal-webhook
 
 # Environment-specific targets
 build-staging: ## Build staging environment
