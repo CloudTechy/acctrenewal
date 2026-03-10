@@ -11,6 +11,8 @@ const validateEnvironment = () => {
   
   if (!paystackKey) {
     errors.push('PAYSTACK_SECRET_KEY not configured');
+  } else if (paystackKey.startsWith('pk_')) {
+    errors.push('PAYSTACK_SECRET_KEY is using a public key (pk_) instead of a secret key (sk_)');
   } else if (paystackKey.length < 20) {
     // Paystack keys are typically 50+ chars (JWT format or sk_* format)
     errors.push('PAYSTACK_SECRET_KEY appears to be invalid (too short)');
