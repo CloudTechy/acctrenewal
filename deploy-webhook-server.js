@@ -65,6 +65,62 @@ const executeCommand = (command, args = [], cwd = APP_DIR) => {
   });
 };
 
+const parseEnvFile = (envFilePath) => {
+  if (!fs.existsSync(envFilePath)) {
+    return {};
+  }
+
+  const envContent = fs.readFileSync(envFilePath, 'utf8');
+  const result = {};
+
+  for (const rawLine of envContent.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+
+    const separatorIndex = line.indexOf('=');
+    if (separatorIndex <= 0) continue;
+
+    const key = line.slice(0, separatorIndex).trim();
+    const value = line.slice(separatorIndex + 1).trim();
+    result[key] = value;
+  }
+
+  return result;
+};
+
+const redactPrefix = (value) => {
+  const sanitized = String(value || '').trim();
+  return sanitized ? `${sanitized.slice(0, 10)}...` : 'not-set';
+};
+
+const validatePaystackEnv = (envVars, envFileName) => {
+  const errors = [];
+  const warnings = [];
+  const secretKey = String(envVars.PAYSTACK_SECRET_KEY || '').trim();
+  const publicKey = String(envVars.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '').trim();
+
+  if (!secretKey) {
+    errors.push(`PAYSTACK_SECRET_KEY is missing in ${envFileName}`);
+  } else if (secretKey.startsWith('pk_')) {
+    errors.push(`PAYSTACK_SECRET_KEY in ${envFileName} is a public key (pk_) and must be a secret key (sk_)`);
+  } else if (!secretKey.startsWith('sk_')) {
+    warnings.push(`PAYSTACK_SECRET_KEY in ${envFileName} does not start with sk_`);
+  }
+
+  if (!publicKey) {
+    warnings.push(`NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY is missing in ${envFileName}`);
+  } else if (!publicKey.startsWith('pk_')) {
+    errors.push(`NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY in ${envFileName} must start with pk_`);
+  }
+
+  return {
+    errors,
+    warnings,
+    secretPrefix: redactPrefix(secretKey),
+    publicPrefix: redactPrefix(publicKey),
+  };
+};
+
 // Validate webhook signature
 const validateSignature = (payload, signature) => {
   const hmac = crypto.createHmac('sha256', WEBHOOK_SECRET);
@@ -119,6 +175,19 @@ const handleDeployment = async (data) => {
     const envFilePath = path.join(APP_DIR, envFile);
     if (!fs.existsSync(envFilePath)) {
       log(`⚠️  Warning: ${envFile} not found in ${APP_DIR}`);
+    } else {
+      const envVars = parseEnvFile(envFilePath);
+      const paystackValidation = validatePaystackEnv(envVars, envFile);
+
+      log(`[ENV_VALIDATE] Paystack keys for ${envFile}: secret=${paystackValidation.secretPrefix}, public=${paystackValidation.publicPrefix}`);
+
+      if (paystackValidation.warnings.length > 0) {
+        log(`[ENV_VALIDATE] Warnings: ${paystackValidation.warnings.join(' | ')}`);
+      }
+
+      if (paystackValidation.errors.length > 0) {
+        throw new Error(`[ENV_VALIDATE] ${paystackValidation.errors.join(' | ')}`);
+      }
     }
 
     // Step 5: Backup current docker-compose.yml
